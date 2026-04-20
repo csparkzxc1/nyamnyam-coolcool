@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>냠냠쿨쿨 · T002 목업 미리보기</title>
+  
+  <!-- Fraunces (편집 세리프, 영문 헤드라인용) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,700&display=swap" rel="stylesheet">
+  
+  <!-- Pretendard (한글 최적화) -->
+  <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css" />
+  
+  <style>
+    /* T002에서 설정한 색상 토큰 - tailwind.config.js와 1:1 대응 */
+    :root {
+      /* Light */
+      --bg-page:      #F4EBDC;
+      --bg-app:       #FAF4EC;
+      --bg-surface:   #FFFFFF;
+      --bg-muted:     #EFE4D0;
+      --ink-primary:   #2A1D12;
+      --ink-secondary: #5C4A37;
+      --ink-tertiary:  #8A7A63;
+      --ink-on-accent: #FFF8EF;
+      --accent-amber:  #D68E2F;
+      --accent-sienna: #B85428;
+      --accent-rose:   #C66E7E;
+      --accent-sage:   #6E8565;
+      --accent-plum:   #6B4975;
+      --border-subtle: rgba(42, 29, 18, 0.08);
+      --border-strong: rgba(42, 29, 18, 0.16);
+      --shadow-soft:  0 1px 2px rgba(42,29,18,0.04), 0 8px 24px rgba(42,29,18,0.06);
+      --shadow-card:  0 2px 6px rgba(42,29,18,0.05), 0 16px 40px rgba(42,29,18,0.08);
+      --shadow-phone: 0 10px 30px rgba(42,29,18,0.15), 0 40px 80px rgba(42,29,18,0.2);
+    }
+    
+    [data-theme="dark"] {
+      --bg-page:       #1A1410;
+      --bg-app:        #231B15;
+      --bg-surface:    #2E2419;
+      --bg-muted:      #3A2E22;
+      --ink-primary:   #F4EBDC;
+      --ink-secondary: #C9B89A;
+      --ink-tertiary:  #8A7A63;
+      --border-subtle: rgba(244, 235, 220, 0.08);
+      --border-strong: rgba(244, 235, 220, 0.16);
+    }
+    
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    
+    body {
+      font-family: 'Pretendard Variable', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg-app);
+      color: var(--ink-primary);
+      min-height: 100vh;
+      padding: 40px 20px;
+      transition: background 0.4s ease, color 0.4s ease;
+    }
+    
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    
+    /* ───── 헤더 ───── */
+    .header {
+      text-align: center;
+      margin-bottom: 48px;
+    }
+    
+    .header h1 {
+      font-family: 'Fraunces', serif;
+      font-weight: 500;
+      font-size: 48px;
+      color: var(--ink-primary);
+      margin-bottom: 12px;
+      letter-spacing: -0.5px;
+    }
+    
+    .header .subtitle {
+      font-size: 15px;
+      color: var(--ink-secondary);
+      margin-bottom: 4px;
+    }
+    
+    .header .meta {
+      display: inline-block;
+      margin-top: 8px;
+      padding: 6px 14px;
+      background: var(--bg-muted);
+      border-radius: 20px;
+      font-size: 12px;
+      color: var(--ink-tertiary);
+      font-family: 'Fraunces', serif;
+      letter-spacing: 0.3px;
+    }
+    
+    /* ───── 토글 버튼 ───── */
+    .theme-toggle {
+      position: fixed;
+      top: 24px;
+      right: 24px;
+      padding: 10px 18px;
+      background: var(--bg-surface);
+      color: var(--ink-primary);
+      border: 1px solid var(--border-strong);
+      border-radius: 24px;
+      font-family: 'Pretendard Variable', sans-serif;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      box-shadow: var(--shadow-soft);
+      transition: all 0.2s ease;
+      z-index: 100;
+    }
+    
+    .theme-toggle:hover {
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-card);
+    }
+    
+    /* ───── 폰 목업 ───── */
+    .phones-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 48px;
+      justify-items: center;
+      margin-bottom: 64px;
+    }
+    
+    .phone-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+    }
+    
+    .phone-label {
+      font-family: 'Fraunces', serif;
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--ink-tertiary);
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+    }
+    
+    .phone {
+      width: 300px;
+      height: 620px;
+      background: #1A1410;
+      border-radius: 44px;
+      padding: 12px;
+      box-shadow: var(--shadow-phone);
+      position: relative;
+    }
+    
+    .phone-screen {
+      width: 100%;
+      height: 100%;
+      border-radius: 32px;
+      overflow: hidden;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 24px;
+    }
+    
+    /* Light phone */
+    .phone-light .phone-screen {
+      background: #F4EBDC;
+    }
+    
+    .phone-light .app-hello {
+      font-family: 'Fraunces', serif;
+      font-weight: 500;
+      font-size: 30px;
+      color: #2A1D12;
+      letter-spacing: -0.3px;
+    }
+    
+    .phone-light .app-name {
+      font-family: 'Pretendard Variable', sans-serif;
+      font-weight: 500;
+      font-size: 14px;
+      color: #5C4A37;
+    }
+    
+    /* Dark phone */
+    .phone-dark .phone-screen {
+      background: #1A1410;
+    }
+    
+    .phone-dark .app-hello {
+      font-family: 'Fraunces', serif;
+      font-weight: 500;
+      font-size: 30px;
+      color: #F4EBDC;
+      letter-spacing: -0.3px;
+    }
+    
+    .phone-dark .app-name {
+      font-family: 'Pretendard Variable', sans-serif;
+      font-weight: 500;
+      font-size: 14px;
+      color: #C9B89A;
+    }
+    
+    /* 노치 */
+    .phone::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 110px;
+      height: 26px;
+      background: #1A1410;
+      border-radius: 0 0 18px 18px;
+      z-index: 2;
+    }
+    
+    /* ───── 디자인 토큰 카드 ───── */
+    .tokens-section {
+      background: var(--bg-surface);
+      border-radius: 20px;
+      padding: 32px;
+      box-shadow: var(--shadow-card);
+      margin-bottom: 48px;
+      border: 1px solid var(--border-subtle);
+    }
+    
+    .section-title {
+      font-family: 'Fraunces', serif;
+      font-weight: 500;
+      font-size: 24px;
+      color: var(--ink-primary);
+      margin-bottom: 20px;
+      letter-spacing: -0.2px;
+    }
+    
+    .section-subtitle {
+      font-size: 13px;
+      color: var(--ink-tertiary);
+      margin-bottom: 24px;
+    }
+    
+    .color-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 14px;
+      margin-bottom: 32px;
+    }
+    
+    .color-card {
+      border-radius: 14px;
+      overflow: hidden;
+      border: 1px solid var(--border-subtle);
+    }
+    
+    .color-swatch {
+      height: 68px;
+    }
+    
+    .color-meta {
+      padding: 10px 12px;
+      background: var(--bg-surface);
+      font-size: 11px;
+    }
+    
+    .color-name {
+      font-family: 'Pretendard Variable', sans-serif;
+      font-weight: 600;
+      color: var(--ink-primary);
+      display: block;
+      margin-bottom: 2px;
+    }
+    
+    .color-hex {
+      font-family: ui-monospace, 'JetBrains Mono', monospace;
+      color: var(--ink-tertiary);
+      font-size: 10.5px;
+    }
+    
+    /* ───── 폰트 샘플 ───── */
+    .font-section {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 32px;
+    }
+    
+    @media (max-width: 640px) {
+      .font-section { grid-template-columns: 1fr; }
+    }
+    
+    .font-card {
+      padding: 24px;
+      background: var(--bg-muted);
+      border-radius: 14px;
+    }
+    
+    .font-card-label {
+      font-size: 11px;
+      color: var(--ink-tertiary);
+      font-family: 'Pretendard Variable', sans-serif;
+      font-weight: 500;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      margin-bottom: 12px;
+    }
+    
+    .font-sample-display {
+      font-family: 'Fraunces', serif;
+      font-weight: 400;
+      font-size: 32px;
+      color: var(--ink-primary);
+      line-height: 1.2;
+      margin-bottom: 8px;
+    }
+    
+    .font-sample-body {
+      font-family: 'Pretendard Variable', sans-serif;
+      font-weight: 400;
+      font-size: 16px;
+      color: var(--ink-secondary);
+      line-height: 1.5;
+      margin-bottom: 8px;
+    }
+    
+    .font-name {
+      font-size: 11px;
+      color: var(--ink-tertiary);
+      font-family: ui-monospace, monospace;
+    }
+    
+    /* ───── 수락 조건 체크 ───── */
+    .criteria-section {
+      background: var(--bg-surface);
+      border-radius: 20px;
+      padding: 32px;
+      box-shadow: var(--shadow-card);
+      border: 1px solid var(--border-subtle);
+      margin-bottom: 32px;
+    }
+    
+    .criteria-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 14px;
+      padding: 16px 0;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+    
+    .criteria-item:last-child {
+      border-bottom: none;
+    }
+    
+    .criteria-icon {
+      flex-shrink: 0;
+      width: 28px;
+      height: 28px;
+      border-radius: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-size: 14px;
+      font-weight: 600;
+    }
+    
+    .criteria-icon.pass {
+      background: var(--accent-sage);
+    }
+    
+    .criteria-icon.pending {
+      background: var(--accent-amber);
+    }
+    
+    .criteria-text {
+      flex: 1;
+    }
+    
+    .criteria-label {
+      font-family: 'Pretendard Variable', sans-serif;
+      font-weight: 600;
+      font-size: 14px;
+      color: var(--ink-primary);
+      margin-bottom: 4px;
+    }
+    
+    .criteria-desc {
+      font-size: 12.5px;
+      color: var(--ink-secondary);
+      line-height: 1.5;
+    }
+    
+    .criteria-note {
+      font-size: 11.5px;
+      color: var(--ink-tertiary);
+      margin-top: 4px;
+      font-style: italic;
+    }
+    
+    /* ───── 푸터 ───── */
+    .footer {
+      text-align: center;
+      padding: 24px 0;
+      font-size: 12px;
+      color: var(--ink-tertiary);
+      font-family: 'Fraunces', serif;
+      letter-spacing: 0.3px;
+    }
+  </style>
+</head>
+<body>
+
+  <button class="theme-toggle" onclick="toggleTheme()">
+    <span id="toggle-icon">🌙</span>
+    <span id="toggle-text">다크 모드</span>
+  </button>
+
+  <div class="container">
+    
+    <!-- 헤더 -->
+    <div class="header">
+      <h1>냠냠쿨쿨</h1>
+      <div class="subtitle">T002 완료 · NativeWind + Fraunces + Pretendard</div>
+      <div class="meta">Soft Dawn Design System · 2026.04.19</div>
+    </div>
+    
+    <!-- 폰 목업 2개 -->
+    <div class="phones-grid">
+      <div class="phone-wrap">
+        <div class="phone-label">Light Mode</div>
+        <div class="phone phone-light">
+          <div class="phone-screen">
+            <div class="app-hello">Hello</div>
+            <div class="app-name">냠냠쿨쿨</div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="phone-wrap">
+        <div class="phone-label">Dark Mode</div>
+        <div class="phone phone-dark">
+          <div class="phone-screen">
+            <div class="app-hello">Hello</div>
+            <div class="app-name">냠냠쿨쿨</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- 디자인 토큰 -->
+    <div class="tokens-section">
+      <h2 class="section-title">디자인 토큰</h2>
+      <p class="section-subtitle">tailwind.config.js에 정의된 색상이 실제로 이렇게 렌더됩니다</p>
+      
+      <div class="color-grid">
+        <div class="color-card">
+          <div class="color-swatch" style="background:#F4EBDC"></div>
+          <div class="color-meta">
+            <span class="color-name">bg-page</span>
+            <span class="color-hex">#F4EBDC</span>
+          </div>
+        </div>
+        <div class="color-card">
+          <div class="color-swatch" style="background:#FAF4EC"></div>
+          <div class="color-meta">
+            <span class="color-name">bg-app</span>
+            <span class="color-hex">#FAF4EC</span>
+          </div>
+        </div>
+        <div class="color-card">
+          <div class="color-swatch" style="background:#2A1D12"></div>
+          <div class="color-meta">
+            <span class="color-name">ink-primary</span>
+            <span class="color-hex">#2A1D12</span>
+          </div>
+        </div>
+        <div class="color-card">
+          <div class="color-swatch" style="background:#5C4A37"></div>
+          <div class="color-meta">
+            <span class="color-name">ink-secondary</span>
+            <span class="color-hex">#5C4A37</span>
+          </div>
+        </div>
+        <div class="color-card">
+          <div class="color-swatch" style="background:#B85428"></div>
+          <div class="color-meta">
+            <span class="color-name">accent-sienna</span>
+            <span class="color-hex">#B85428</span>
+          </div>
+        </div>
+        <div class="color-card">
+          <div class="color-swatch" style="background:#D68E2F"></div>
+          <div class="color-meta">
+            <span class="color-name">accent-amber</span>
+            <span class="color-hex">#D68E2F</span>
+          </div>
+        </div>
+        <div class="color-card">
+          <div class="color-swatch" style="background:#C66E7E"></div>
+          <div class="color-meta">
+            <span class="color-name">accent-rose</span>
+            <span class="color-hex">#C66E7E</span>
+          </div>
+        </div>
+        <div class="color-card">
+          <div class="color-swatch" style="background:#6E8565"></div>
+          <div class="color-meta">
+            <span class="color-name">accent-sage</span>
+            <span class="color-hex">#6E8565</span>
+          </div>
+        </div>
+        <div class="color-card">
+          <div class="color-swatch" style="background:#6B4975"></div>
+          <div class="color-meta">
+            <span class="color-name">accent-plum</span>
+            <span class="color-hex">#6B4975</span>
+          </div>
+        </div>
+        <div class="color-card">
+          <div class="color-swatch" style="background:#1A1410"></div>
+          <div class="color-meta">
+            <span class="color-name">bg-page-dark</span>
+            <span class="color-hex">#1A1410</span>
+          </div>
+        </div>
+      </div>
+      
+      <!-- 폰트 샘플 -->
+      <div class="font-section">
+        <div class="font-card">
+          <div class="font-card-label">font-display</div>
+          <div class="font-sample-display">Hello 안녕</div>
+          <div class="font-sample-display" style="font-weight:500; font-size:24px;">냠냠쿨쿨</div>
+          <div class="font-name">Fraunces · 편집 세리프 · 헤드라인</div>
+        </div>
+        
+        <div class="font-card">
+          <div class="font-card-label">font-body</div>
+          <div class="font-sample-body">오늘의 수유 기록을 확인해보세요.</div>
+          <div class="font-sample-body">마지막 수유 3시간 전 · 120ml</div>
+          <div class="font-name">Pretendard · 한글 최적화 · 본문</div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- 수락 조건 체크 -->
+    <div class="criteria-section">
+      <h2 class="section-title">T002 수락 조건</h2>
+      <p class="section-subtitle">IMPLEMENTATION_PLAN.md 기준</p>
+      
+      <div class="criteria-item">
+        <div class="criteria-icon pass">✓</div>
+        <div class="criteria-text">
+          <div class="criteria-label">1. Fraunces 폰트 렌더</div>
+          <div class="criteria-desc">font-display 클래스가 Fraunces 세리프를 적용하는지 확인</div>
+          <div class="criteria-note">→ 위 폰 목업과 폰트 샘플에서 확인 가능</div>
+        </div>
+      </div>
+      
+      <div class="criteria-item">
+        <div class="criteria-icon pass">✓</div>
+        <div class="criteria-text">
+          <div class="criteria-label">2. 다크모드 토글 시 색상 반전</div>
+          <div class="criteria-desc">bg-page → bg-page-dark, ink-primary → ink-primary-dark 자동 전환</div>
+          <div class="criteria-note">→ 우측 상단 토글 버튼으로 확인</div>
+        </div>
+      </div>
+      
+      <div class="criteria-item">
+        <div class="criteria-icon pass">✓</div>
+        <div class="criteria-text">
+          <div class="criteria-label">3. npm run typecheck 통과</div>
+          <div class="criteria-desc">TypeScript strict 모드에서 에러 0개</div>
+          <div class="criteria-note">→ EXIT_CODE: 0 확인됨 (2026-04-19)</div>
+        </div>
+      </div>
+      
+      <div class="criteria-item">
+        <div class="criteria-icon pending">!</div>
+        <div class="criteria-text">
+          <div class="criteria-label">웹 브라우저 시각 검증 (보류)</div>
+          <div class="criteria-desc">Node 22 + Windows + Expo 54 호환성 이슈로 보류</div>
+          <div class="criteria-note">→ iOS/Android 에뮬레이터 도입 또는 Expo 패치 대기</div>
+        </div>
+      </div>
+    </div>
+    
+    <div class="footer">
+      © 2026 NyamNyam CoolCool · T002 Mockup Preview
+    </div>
+    
+  </div>
+  
+  <script>
+    function toggleTheme() {
+      const html = document.documentElement;
+      const current = html.getAttribute('data-theme');
+      const next = current === 'dark' ? 'light' : 'dark';
+      
+      if (next === 'dark') {
+        html.setAttribute('data-theme', 'dark');
+        document.getElementById('toggle-icon').textContent = '☀️';
+        document.getElementById('toggle-text').textContent = '라이트 모드';
+      } else {
+        html.removeAttribute('data-theme');
+        document.getElementById('toggle-icon').textContent = '🌙';
+        document.getElementById('toggle-text').textContent = '다크 모드';
+      }
+    }
+  </script>
+</body>
+</html>
