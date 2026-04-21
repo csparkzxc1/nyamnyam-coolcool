@@ -235,3 +235,50 @@
 
 - T105 Zustand + TanStack Query 착수 (T103b는 별도 백그라운드 추적)
 - 또는 T103b 새 접근 (간단 테이블 격리 테스트 등)
+
+## 2026-04-21 - T105 완료
+
+### 완료
+
+- **패키지 설치** (`npx expo install`):
+  - `zustand ^5.0.12`
+  - `@tanstack/react-query ^5.99.2`
+  - `@dev-plugins/react-query ^0.4.0`
+  - (`@react-native-async-storage/async-storage` 기존 설치됨)
+- **`src/stores/sessionStore.ts`** 신규
+  - `useSessionStore`: `session`, `currentBabyId`, `setSession`, `setCurrentBabyId`
+- **`src/lib/queryClient.ts`** 신규
+  - `staleTime: 30_000`, `retry: 2`
+- **`app/_layout.tsx`** 수정
+  - `QueryClientProvider` + `useReactQueryDevTools` 래핑
+  - `supabase.auth.onAuthStateChange` → `useEffect` + cleanup(`subscription.unsubscribe()`)
+- **`src/lib/supabase.ts`**: `storage`, `persistSession`, `autoRefreshToken` 이미 설정됨 — 수정 불필요
+- **타입 체크**: `npx tsc --noEmit` 에러 없음 ✅
+
+### T002 Metro 이슈 지속
+
+- `npm start` (`NODE_OPTIONS=--no-experimental-require-module` 포함) 및 `npx expo start` 양쪽 모두 동일 에러 재현
+- 에러: `ERR_UNSUPPORTED_ESM_URL_SCHEME` — Expo 54가 `metro.config.cjs`를 ESM import로 로딩 시도, Windows 절대경로 `C:\...`를 `file://` URL로 변환 실패
+- 원인: Expo 54 + Node 22 + Windows 조합 버그 (Sprint 0부터 지속)
+- 결정: T105 수락조건에 Metro 기동 없음 → 커밋 진행. T002는 별도 fix로 처리 예정
+
+### T103b RLS 보류 상태 유지
+
+- 실제 로그인 JWT 기반 CRUD (T201 이후) 시 자연 검증 예정
+- JWT / auth.uid / 권한 / 트리거 정상 확인됨 (이전 세션 스크립트로 증명)
+- `with check (true)` 정책으로도 INSERT 차단 재현 — 정책 조건식 너머 계층 문제
+- 오늘 소거된 가설: persistSession 관련 아님 (`src/lib/supabase.ts`의 `storage` / `persistSession` / `autoRefreshToken` 설정 정상 확인)
+
+### 수락 조건 달성 (T105)
+
+- [x] `useSessionStore` 생성 — `session`, `currentBabyId` 상태 관리
+- [x] `QueryClientProvider` 래핑 — `_layout.tsx`
+- [x] `onAuthStateChange` useEffect + cleanup
+- [x] TanStack Query devtools (`useReactQueryDevTools`) dev 모드 연결
+- [x] `staleTime: 30_000`, `retry: 2` 기본값
+- [x] 타입 체크 통과
+
+### 다음
+
+- T002 Metro 이슈 fix (metro.config.cjs → .js 리네임 등 시도)
+- T201 Supabase Auth 착수

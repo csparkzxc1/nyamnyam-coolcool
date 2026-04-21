@@ -2,13 +2,26 @@ import '../global.css';
 
 import { useEffect } from 'react';
 
+import { useReactQueryDevTools } from '@dev-plugins/react-query';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 
+import { queryClient } from '@/lib/queryClient';
+import { supabase } from '@/lib/supabase';
+import { useSessionStore } from '@/stores/sessionStore';
+
 SplashScreen.preventAutoHideAsync();
 
+function Providers({ children }: { children: React.ReactNode }) {
+  useReactQueryDevTools(queryClient);
+  return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
+}
+
 export default function RootLayout() {
+  const setSession = useSessionStore((s) => s.setSession);
+
   const [loaded, error] = useFonts({
     Fraunces: require('../assets/fonts/Fraunces-Variable.ttf'),
     'Pretendard Variable': require('../assets/fonts/Pretendard-Variable.ttf'),
@@ -20,9 +33,22 @@ export default function RootLayout() {
     }
   }, [loaded, error]);
 
+  useEffect(() => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+    });
+    return () => subscription.unsubscribe();
+  }, [setSession]);
+
   if (!loaded && !error) {
     return null;
   }
 
-  return <Stack />;
+  return (
+    <Providers>
+      <Stack />
+    </Providers>
+  );
 }
