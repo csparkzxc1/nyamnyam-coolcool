@@ -290,3 +290,45 @@
 - 판정: 확장자 무관, Expo 54 내부 로더가 Node ESM 경로 강제 호출
 - 원복 완료, T002 계속 보류
 - 다음 접근 가설: Expo 업그레이드 대기 / metro-config 패치 찾기 / Node 다운그레이드 (22 → 20 LTS)
+
+## 2026-04-21 - T201 완료
+
+### 완료
+
+- **`src/features/auth/api.ts`**: `signInWithKakao` 함수 추가 (27줄)
+  - `OAuthSignInOptions` interface (`redirectTo?: string`)
+  - Supabase `signInWithOAuth({ provider: 'kakao', options: { redirectTo } })`
+  - 기본 redirectTo: `nyamnyam://auth/callback`
+  - 에러 시 throw (기존 파일 스타일 유지)
+- **기존 자산 확인** (수정 없음):
+  - `signUp`, `signIn`, `signOut`: T104-b에서 완성됨
+  - `app.json` scheme: `nyamnyam` 이미 설정됨
+  - `supabase/config.toml`: 미생성 (로컬 Supabase CLI 미사용, 결정 1-A 유지)
+
+### 사전 준비 (사용자 수동 완료)
+
+- 카카오 개발자 콘솔: 앱 등록, REST API 키 발급, Client Secret 활성화, Redirect URI 등록, 카카오 로그인 활성화
+- Supabase 대시보드: Authentication → Providers → Kakao 활성화, client ID/secret 입력
+
+### 수락 조건 달성 (T201 — 코드 레벨)
+
+- [x] 이메일 회원가입/로그인 API (기존 `signUp`/`signIn`)
+- [x] 카카오 OAuth 플로우 함수 (`signInWithKakao`)
+- [x] 세션 저장 경로 확립 (`onAuthStateChange` → `useSessionStore`, T105에서 구현)
+- [x] 로그아웃 API (기존 `signOut`)
+- [x] 타입 체크 통과 (`npx tsc --noEmit`)
+
+### 실동작 테스트 보류
+
+- 로그인 UI 부재로 실제 이메일/카카오 플로우 끝단 검증 불가
+- **T202 완료 후 한 번에 검증** 예정
+
+### 커밋
+
+- `2dae6b2 feat(auth): add kakao oauth sign in`
+
+### 다음
+
+- T202 로그인/회원가입 화면 착수
+- 필요 패키지 (미설치): `react-hook-form`, `zod`
+- 생성 파일: `src/components/auth/AuthForm.tsx`, `app/auth/login.tsx`, `app/auth/signup.tsx`
