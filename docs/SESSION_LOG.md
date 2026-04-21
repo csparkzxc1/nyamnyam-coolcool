@@ -405,3 +405,51 @@
 
 - T202 로그 커밋(이 파일)
 - 다음 태스크: T103b RLS 재검증 (실제 로그인 JWT로) 또는 T002 Metro fix 재시도 — 우선순위 결정 필요
+
+## 2026-04-21 - T002 재도전 (실패, 원인 특정)
+
+### 시도 내용
+
+- **가설 1: Node 22 → 20 LTS 다운그레이드**
+  - nvm-windows로 Node 20.18.0 활성화 (Program Files의 Node 22는 유지, nvm 심링크가 시스템 전역 PATH를 덮어씀)
+  - `npm start` 실행 → 동일한 `ERR_UNSUPPORTED_ESM_URL_SCHEME` 재현
+  - 에러 지점 동일 (`throwIfUnsupportedURLScheme`), 스택 트레이스만 Node 20/22 차이
+  - **결론: Node 버전 무관. 가설 소각.**
+
+- **가설 2: Expo 54 패치 최신화**
+  - 현재: `expo ~54.0.33`
+  - npm 최신 stable: `expo@55.0.15` (메이저 업그레이드)
+  - 54 패치는 이미 최신 근처 — 마이너 업데이트로 해결 경로 없음
+  - **결론: 54 패치 업그레이드 경로 소멸. 가설 소각.**
+
+### 원인 특정 (부분)
+
+- 에러 메시지: `Only URLs with a scheme in: file, data, and node are supported by the default ESM loader. On Windows, absolute paths must be valid file:// URLs. Received protocol 'c:'`
+- metro.config.cjs 자체는 CommonJS 파일 (`require`, `module.exports`). 그러나 Expo CLI 내부가 이 파일을 **ESM 동적 import()** 로 로딩하려 하며, Windows 절대경로 `C:\...`를 `file://` URL로 변환하지 않은 채 전달 → 실패
+- **Expo 54 내부의 metro config 로딩 유틸 버그 (Windows 한정)**
+
+### 남은 가설 / 다음 방향
+
+- **Expo 55 메이저 업그레이드** — 유일하게 남은 경로. 별도 태스크(T002b)로 분리.
+  - 리스크: breaking change로 기존 코드(라우팅, 폰트, nativewind 통합) 영향 가능
+  - 접근: 공식 릴리스 노트 + 마이그레이션 가이드 선행 조사 → 브랜치에서 업그레이드 시도 → 문제 시 main 롤백
+- **patch-package로 @expo/cli 국소 수정** — 차선. Expo CLI 내 `pathToFileURL` 미적용 지점 특정 → 수정. 조사 시간 필요, 업스트림 변경 시 패치 갱신 부담.
+
+### 부작용 / 환경 변경
+
+- **Node 버전**: nvm-windows로 Node 20.18.0으로 전환. 시스템 심링크 기반이라 새 셸에서도 유지됨.
+  - 원복 수단: `nvm use 22.22.2` (Node 22.22.2 nvm에 설치 완료)
+  - 현재 선택: Node 20 유지 (동작 확인된 버전, 다른 도구 이슈 없음)
+- **Program Files의 Node 22** — 디스크에 여전히 존재하나 PATH에서 밀림. 제거하지 않음 (nvm 전용 사용 원칙으로 전환)
+- **글로벌 npm 재설치** — Node 20 쪽에 `eas-cli@18.7.0`만 재설치. `@capacitor/cli`, `@expo/ngrok`은 필요 없어 생략.
+
+### 타임박스
+
+- 계획: 30분
+- 실제: 약 40분 (Node 설치/eas-cli 재설치 포함)
+- 판정: 원인 특정 + 다음 가설 좁힘 = 타임박스 가치 있었음. 그러나 Metro는 여전히 미기동.
+
+### 다음
+
+- **T002b (신규 태스크)**: Expo 55 업그레이드 조사 및 시도 (별도 브랜치, 별도 타임박스)
+- 우선순위 재검토: T002b와 Phase 2 후속(T103b RLS, onboarding 등) 중 어느 쪽 먼저
