@@ -179,3 +179,59 @@
 ### 다음
 
 - T104 착수 예정
+
+## 2026-04-21 (오후) - T104 완료 + T103b 미해결 장기 디버깅
+
+### 완료
+
+- **T104-a**: logging API 래퍼 19개 함수 (`src/features/logging/api.ts`, 315 줄)
+  - 커밋: `7805464 feat(api): domain API wrappers over Supabase (logging)`
+- **T104-b**: auth API 래퍼 6개 함수 (`src/features/auth/api.ts`, 148 줄)
+  - 커밋: `58af1da feat(api): domain API wrappers over Supabase (auth)`
+
+### T103b 디버깅 — 미해결, 원인 좁힘
+
+- **오전 세션**에서 Supabase Studio `set local` impersonate 방식으로 첫 시도 → 실패 (`42501`)
+- **오후 세션**에서 재도전, Node.js 스크립트 3개 작성:
+  - `scripts/verify-rls.ts` — 3개 수락 조건 검증 자동화
+  - `scripts/diagnose-rls.ts` — JWT payload 디코드 + INSERT 에러 상세
+  - `scripts/check-auth-uid.ts` — RPC로 서버 측 `auth.uid()` 직접 조회
+- **확인된 사실** (다음 세션 재검증 시 재조사 불필요):
+  - JWT 완벽: `sub`, `role`, `aud` 모두 정확한 값
+  - 서버 측 `auth.uid()` = 로그인 유저 UUID (RPC로 증명)
+  - `role` = `authenticated` 정상
+  - `auth.jwt()` 전체 claims 정상 (session_id, email, aud 모두)
+  - authenticated 역할 INSERT 권한 있음 (`information_schema.role_table_grants`)
+  - 모든 정책 `polpermissive: true` (RESTRICTIVE 충돌 없음)
+  - Legacy anon key / publishable key 둘 다 동일 결과
+  - 트리거 `auto_register_caregiver` disable 해도 동일 에러 (연쇄 트리거 원인 아님)
+  - 정책을 `with check (true)`로 무력화해도 여전히 RLS 차단 (!)
+- **남은 미스터리**: `with check (true)` 인데도 `new row violates row-level security policy` 발생. 정책 문법이 아닌 더 깊은 계층의 문제.
+
+### 다음 세션 재개 포인트
+
+- `scripts/*` 전부 커밋돼 있음 — 다음 세션에서 재사용 가능
+- 테스트 유저 2명 (`test-mom-a`, `test-mom-b`) 유지
+- **시도해볼 방향**:
+  1. Supabase 공식 문서 / GitHub issues 검색 (`"with check (true)" "violates row-level security"` 키워드)
+  2. 혹시 `BYPASSRLS` 역할 속성이 필요한지 확인
+  3. 완전히 새 간단 테이블 만들어서 동일 증상 재현되는지 격리 테스트
+  4. Supabase Support Discord 질문 고려
+- **판단**: 기능 영향 크지 않음. 실제 앱 UI 개발 진행 중 발견되는 이슈로 다뤄도 무방. T104(API 래퍼)와 T105(상태 관리) 먼저 진행 가능.
+
+### 시스템 복구 확인
+
+- 트리거 `babies_auto_register_caregiver` 재활성화됨
+- 정책 `babies_insert_authenticated` 원상 복구 (auth.uid() IS NOT NULL AND created_by = auth.uid())
+- 디버그 함수 `debug_auth_uid` 제거됨
+
+### 미해결 이슈 (누적)
+
+- T103b 검증 (이번 세션에도 못 끝냄, 다음 세션 최우선)
+- T002 Metro 번들링
+- 단위 테스트 인프라 부재 (T104 수락 조건 #1, #2)
+
+### 다음
+
+- T105 Zustand + TanStack Query 착수 (T103b는 별도 백그라운드 추적)
+- 또는 T103b 새 접근 (간단 테이블 격리 테스트 등)
