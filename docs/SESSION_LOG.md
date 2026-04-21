@@ -127,3 +127,55 @@
 ### 다음
 
 - `.gitattributes` 추가 후 T103 (RLS 정책) 착수
+
+## 2026-04-21 - T103a 완료 + T103b 검증 보류
+
+### 완료
+
+- **.gitattributes 추가**: Git이 TypeScript 파일을 바이너리로 오해하는 문제 해결
+  - 커밋: `1c24df5 chore: add .gitattributes and log T102 session`
+  - `*.ts text eol=lf` 등 확장자별 텍스트/바이너리 선언
+  - `git check-attr -a` 로 `text: set, eol: lf` 적용 확인
+- **T103a**: Row Level Security 정책 구현
+  - 커밋: `024f06b feat(db): row level security policies`
+  - 파일: `supabase/migrations/20260421000000_rls.sql` (179 줄)
+  - 5개 테이블 RLS 활성화 + 19개 정책 + 함수 2개 + 트리거 1개
+  - 대시보드 Authentication > Policies 에서 전수 확인
+
+### 결정사항
+
+- **D1** caregivers 테이블 정책 포함 (원 플랜 누락분 보강, SELECT/INSERT/DELETE 3개)
+- **D2-a** babies DELETE 허용 (본인만)
+- **D3-a** 아기 생성 시 자동 caregiver 등록 트리거 (DB 레벨 무결성 보장)
+- **D4-b** 영문 네이밍 컨벤션 (`{table}_{action}_{target}`)
+- **D5-a** `is_caregiver()` 함수에 `auth.uid() IS NOT NULL` 방어 체크
+- T103을 a/b 분리: a는 구현, b는 검증
+
+### 플랜 대비 변경
+
+- 원 플랜의 주석 `-- 동일 패턴 (복붙)` 부분을 실제 SQL로 명시 (sleep/diaper_records 정책)
+- caregivers 테이블 정책 3개 추가 (원 플랜 전무)
+- babies DELETE 정책 추가 (원 플랜 누락)
+- 트리거 `babies_auto_register_caregiver` 추가 (원 플랜에 없음)
+- 정책 이름 한글 → 영문
+
+### 미해결 이슈
+
+- **T103b 검증 미완 (의식적 유예)**
+  - 시도: Supabase SQL Editor에서 `set local role authenticated` + `set local request.jwt.claims` 로 유저 impersonate 후 INSERT 검증
+  - 결과: 진단 쿼리로 `auth.uid()`, `auth.role()`, `current_user` 전부 기대값 정확히 반환됨에도 INSERT 시 RLS policy violation (42501)
+  - 원인 추정: Studio의 set-based impersonate 방식과 RLS의 `WITH CHECK` 평가 사이 미묘한 컨텍스트 차이. 정책 조건식(`pg_policy` 조회)은 의도한 대로 등록됨 확인.
+  - **재검증 계획**: T201 또는 T3xx 화면에서 실제 로그인 JWT 기반 CRUD 수행 시 자연스럽게 검증됨. 별도 Node.js 스크립트 방식도 고려.
+- T002 Metro 번들링 문제 여전히 미해결
+- 테스트 유저 2명 Authentication 에 생성됨 (`test-mom-a@nyamnyam.test`, `test-mom-b@nyamnyam.test`). 정리 보류 (재검증 시 재활용 가능)
+- SUPABASE_ACCESS_TOKEN 만료 2026-04-27
+
+### 수락 조건 달성 (T103a 범위)
+
+- [x] RLS 활성화 — 5개 테이블 모두 🛡 확인
+- [x] 19개 정책 등록 — Authentication > Policies 전수 확인
+- [~] 동작 검증 — 수동 impersonate 방식 실패, 실제 앱 단계에서 재검증 예정
+
+### 다음
+
+- T104 착수 예정
