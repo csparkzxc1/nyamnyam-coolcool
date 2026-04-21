@@ -282,3 +282,11 @@
 
 - T002 Metro 이슈 fix (metro.config.cjs → .js 리네임 등 시도)
 - T201 Supabase Auth 착수
+
+### T002 10분 타임박스 시도 (실패)
+
+- metro.config.cjs → .js rename 시도
+- 동일 ERR_UNSUPPORTED_ESM_URL_SCHEME 재현
+- 판정: 확장자 무관, Expo 54 내부 로더가 Node ESM 경로 강제 호출
+- 원복 완료, T002 계속 보류
+- 다음 접근 가설: Expo 업그레이드 대기 / metro-config 패치 찾기 / Node 다운그레이드 (22 → 20 LTS)
