@@ -146,3 +146,30 @@ export function subscribeToAuthChanges(
   } = supabase.auth.onAuthStateChange(callback);
   return () => subscription.unsubscribe();
 }
+
+// ============================================================
+// OAuth sign in
+// ============================================================
+
+export interface OAuthSignInOptions {
+  redirectTo?: string;
+}
+
+/**
+ * Initiate Kakao OAuth sign-in via Supabase.
+ *
+ * Opens the Kakao authorisation page. On completion, Supabase redirects
+ * to `redirectTo` (default: `nyamnyam://auth/callback`). The deep-link
+ * is caught by Expo Router and the session is picked up automatically
+ * via the `onAuthStateChange` listener wired in `app/_layout.tsx`.
+ *
+ * @throws When the OAuth initiation request fails (network error, provider misconfigured, etc).
+ */
+export async function signInWithKakao(options: OAuthSignInOptions = {}): Promise<void> {
+  const redirectTo = options.redirectTo ?? 'nyamnyam://auth/callback';
+  const { error } = await supabase.auth.signInWithOAuth({
+    provider: 'kakao',
+    options: { redirectTo },
+  });
+  if (error) throw error;
+}
