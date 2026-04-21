@@ -332,3 +332,76 @@
 - T202 로그인/회원가입 화면 착수
 - 필요 패키지 (미설치): `react-hook-form`, `zod`
 - 생성 파일: `src/components/auth/AuthForm.tsx`, `app/auth/login.tsx`, `app/auth/signup.tsx`
+
+## 2026-04-21 - T202 완료
+
+### 완료
+
+- **패키지 설치** (커밋 `f223b88`):
+  - `react-hook-form ^7.73.1`
+  - `zod ^4.3.6` (주의: v4, 이전 코드의 v3 API와 차이 있음)
+  - `@hookform/resolvers ^5.2.2` (zod v4 호환)
+- **`tailwind.config.js`**: `brand-kakao` / `brand-kakao-ink` 토큰 추가 (카카오 공식 `#FEE500` / `#191919`, 다크모드 동일)
+- **`src/components/auth/AuthForm.tsx`** (신규 220줄):
+  - props: `mode: 'login' | 'signup'`, `onSubmit`, `loading`
+  - zod 스키마 2종 (loginSchema, signupSchema), signup 모드에만 passwordConfirm 필드 렌더
+  - refine으로 비밀번호 일치 검증
+  - `useForm<FormValues>` + `zodResolver`를 `Resolver<FormValues>`로 명시 캐스팅 (두 스키마 유니온 타입 해결 불가 → resolver 경계 한정 캐스팅, 나머지 필드/errors/submit 타입은 안전)
+  - form-level 에러(`formError` state)로 서버 에러 표시
+  - 접근성: `autoCapitalize="none"`, `keyboardType="email-address"`, `textContentType` 모드별 분기
+- **`app/auth/_layout.tsx`** (신규 12줄): Stack + `headerShown: false` + `contentStyle.backgroundColor: '#F4EBDC'` (bg-page 토큰 값 하드코딩 — Stack contentStyle은 className 미지원)
+- **`app/auth/login.tsx`** (신규 99줄):
+  - SafeAreaView + ScrollView(`keyboardShouldPersistTaps="handled"`)
+  - Kakao 버튼 강조(풀폭 `py-4`, `bg-brand-kakao`) → `signInWithKakao()` 호출
+  - AuthForm mode="login" → `signIn()` 호출, 성공 시 `router.replace('/')`
+  - 하단 `/auth/signup` 전환 링크
+- **`app/auth/signup.tsx`** (신규 110줄):
+  - login.tsx 구조 동일
+  - signUp 결과 분기: `session` 있으면 `router.replace('/')`, 없으면(이메일 확인 대기) Alert 안내 후 `/auth/login`으로 이동
+- **타입 체크**: `npx tsc --noEmit` 에러 0 ✅
+
+### 설계 결정
+
+- **AuthForm 책임 분리**: 이메일 폼만 담당(입력/검증/위임). Kakao 버튼 + signIn/signUp API 호출 + 라우팅은 상위 화면(login/signup) 책임
+- **signup 필드**: email + password + passwordConfirm. nickname은 향후 onboarding에서 수집(이탈률 고려, profiles 초기화 분리)
+- **카카오 색 토큰화**: 인라인 스타일 대신 `brand-kakao` 토큰으로 추가 — 카카오 브랜드 가이드상 `#FEE500` / `#191919` 고정이라 다크모드에서도 동일
+- **라이트모드 고정**: auth 화면은 `dark:` 클래스 없이 라이트 고정. `_layout.tsx`의 contentStyle 하드코딩과 일관. 다크모드 대응은 추후.
+- **KeyboardAvoidingView 미사용**: 입력 필드 적고 화면 짧아 당장 불필요 판단. 실기기에서 문제되면 추가.
+
+### 사이드이펙트 / 주의사항
+
+- **Prettier 재포맷**: tailwind.config.js 커밋 시 Husky + lint-staged + prettier가 정렬용 공백을 제거 (`'bg-page':    '#F4EBDC'` → `'bg-page': '#F4EBDC'`). 의도치 않은 diff 26줄 발생했으나 값 변경 없음. 앞으로 정렬 의존 파일은 `// prettier-ignore` 또는 `.prettierignore` 검토 여지. 지금은 prettier 표준 수용.
+- **zod v4 채택**: 기존 예제/문서 대부분 v3. `z.string().email()`는 동작하지만 v4 권장 API는 `z.email()`. 마이그레이션 이슈 나오면 v3 다운그레이드 선택지 열어둠.
+
+### 수락 조건 달성 (T202)
+
+- [x] 로그인 화면 (`app/auth/login.tsx`)
+- [x] 회원가입 화면 (`app/auth/signup.tsx`)
+- [x] 공용 AuthForm 컴포넌트
+- [x] Kakao 버튼 시각 강조 (노란색, 풀폭, 상단)
+- [x] 이메일/비밀번호 폼 + zod 검증
+- [x] 화면 간 전환 링크 (`Link` from expo-router)
+- [x] 미색 배경 + Fraunces 헤드라인 톤 유지
+- [x] 타입 체크 통과 (`npx tsc --noEmit`)
+
+### 실동작 테스트 보류
+
+- Metro(T002) 미기동 → 런타임 검증 불가
+- 카카오 OAuth 실기기 검증 (redirect URL, deep-link 복귀) 미수행
+- 이메일 가입/로그인 실제 Supabase 왕복 미수행
+- **T002 해결 또는 별도 수동 검증 시점에 일괄 테스트 예정**
+
+### 미해결 플래그 유지
+
+- **T002 Metro**: `ERR_UNSUPPORTED_ESM_URL_SCHEME` (Expo 54 + Node 22 + Windows). 다음 가설: Node 20 LTS 다운그레이드 / Expo 업그레이드 / metro-config 패치
+- **T103b RLS**: `with check (true)`로도 INSERT 차단. 실제 로그인 JWT 기반 CRUD(이제 T202로 로그인 UI 확보) 시점에 재검증 예정
+
+### 커밋
+
+- `f223b88 chore(deps): add react-hook-form, zod, @hookform/resolvers for T202`
+- `786c76e feat(auth): add login/signup screens with kakao + email form (T202)`
+
+### 다음
+
+- T202 로그 커밋(이 파일)
+- 다음 태스크: T103b RLS 재검증 (실제 로그인 JWT로) 또는 T002 Metro fix 재시도 — 우선순위 결정 필요
