@@ -560,3 +560,229 @@ d041c25  fix(nativewind): add preset to tailwind config
 3. **실험적 검증 최소화** — 패치 성공 확인 후 바로 커밋, 재설치 실험 금지
 4. **60초 타임아웃 짧을 수 있음** — Metro 번들링 2분 주는 게 안전
 5. **Claude Code 요약 신뢰 금지** — 항상 원문 bash 출력 확인
+
+## 2026-04-22 - 실기기 첫 구동 + Phase 2 진입
+
+### 🎉 오늘의 대약진
+
+어제 오후 T002b 1차 시도 실패 후 원복. 오늘 2차 시도로 **Metro 영속화 성공**, 그 여세로 **실기기 첫 구동 + Phase 2 온보딩 화면 구현**까지 진입.
+
+한 달짜리 숙제가 뚫린 날이자, 쌓아둔 모든 코드가 **실제로 살아 움직이는 것을 처음 확인한 날**.
+
+---
+
+### 오늘 커밋 (7개, 어제 대비 +7)
+
+```
+5931068  feat(onboarding): add baby profile setup flow
+6681880  chore(deps): add @react-native-community/datetimepicker
+647d99a  feat(babies): add api wrappers for baby profile
+d7e6110  fix(router): hide default stack header globally
+f6106fc  docs: log T002b success (metro patched, persisted)
+e922565  fix(build): patch metro-config for Windows ESM URL scheme
+d041c25  fix(nativewind): add preset to tailwind config
+```
+
+---
+
+### 1. T002b 2차 시도 (성공)
+
+1차 시도 실패 교훈을 반영한 "최소 변경 + 실험 없이 한 번에" 전략:
+
+- **NativeWind preset 먼저 별도 커밋** (`d041c25`) — 실패 격리
+- **metro-config 패치 + postinstall + patch 파일** 한 커밋 (`e922565`)
+- **중간 검증 실험 (`npm install --force`) 완전 제거**
+- Metro 기동 확인 직후 바로 커밋
+
+#### 적용된 패치
+
+```diff
+--- a/node_modules/metro-config/src/loadConfig.js
++++ b/node_modules/metro-config/src/loadConfig.js
+@@ -289,7 +289,10 @@ async function loadConfigFile(absolutePath) {
+        }
+      } catch (e) {
+        try {
+-        const configModule = await import(absolutePath);
++        const importPath = process.platform === 'win32'
++          ? require('url').pathToFileURL(absolutePath).href
++          : absolutePath;
++        const configModule = await import(importPath);
+          config = await configModule.default;
+        } catch (error) {
+          let prefix = `Error loading Metro config at: ${absolutePath}\n`;
+```
+
+`patch-package@^8.0.1` devDep + `postinstall: patch-package` 스크립트로 영속화. `npm install` 시마다 자동 재적용.
+
+---
+
+### 2. 실기기 첫 구동 (집 Wi-Fi, 아이폰 Expo Go)
+
+두 차례 접속:
+
+#### 첫 접속 (오전, Metro 성공 직후)
+
+- 포트 8081 충돌 → 8082 사용
+- `TypeError: Body is unusable` 에러 (Expo CLI 54.x의 undici fetch 버그)
+- 해결: `npx expo start --offline` 플래그로 의존성 검증 단계 우회
+- 아이폰 Expo Go 연결 성공
+- 스플래시 → `/auth/login` 자동 리다이렉트 (세션 가드 작동) ✅
+- 로그인 화면 mockups.md 비전 그대로 렌더링 (Fraunces, 미색 배경, Kakao 버튼, 이메일 폼)
+
+#### 회원가입 실동작 검증
+
+테스트 계정으로 가입 → 성공 → 홈 화면 진입.
+
+**이 한 번으로 아래 9개 컴포넌트가 동시 검증됨:**
+
+1. ✅ T202 signUp — Supabase auth.signUp() 실제 성공
+2. ✅ **T103b RLS — profiles 테이블 INSERT 자연 성공** (한 달 미해결 플래그 종결)
+3. ✅ T105 세션 스토어 — signUp 성공 → session 세팅
+4. ✅ onAuthStateChange — 세션 변경 감지 → index 리렌더
+5. ✅ 세션 가드 — session 있으니 로그인 안 보내고 홈으로
+6. ✅ router.replace / conditional render 로 홈 진입
+7. ✅ 홈 플레이스홀더 — 이메일 표시, 로그아웃 버튼
+8. ✅ Supabase 이메일 확인 OFF — 바로 세션 발급됨
+9. ✅ Kakao 브라우저 이메일 — `naver.com`과 `gmail.com` 다 지원
+
+#### 발견된 작은 이슈
+
+- 네비 바에 라우트 파일명("auth" / "index") 노출
+- 원인: 루트 `app/_layout.tsx`의 Stack 기본 헤더
+- 해결: `screenOptions={{ headerShown: false }}` 추가 (커밋 `d7e6110`)
+- 웹 브라우저에서 사라진 것 확인 후 커밋 (아이폰 검증은 스킵)
+
+---
+
+### 3. Phase 2 첫 진입 — 온보딩 화면
+
+실기기 구동 성공 → 바로 Phase 2 본격 구현.
+
+#### 3-1. 인프라 조사 발견
+
+Sprint 0에서 이미 선세팅돼 있던 것들:
+
+- **`supabase/migrations/20260420000000_init.sql`**: babies, caregivers, feeding_records, sleep_records, diaper_records 전 테이블
+- **`supabase/migrations/20260421000000_rls.sql`**: RLS 정책 + `is_caregiver()` 함수 + `auto_register_caregiver()` 트리거
+- **`src/lib/database.types.ts`**: Supabase CLI 자동 생성 타입 (347줄, 모든 테이블 Row/Insert/Update 포함)
+
+**결과:** 백엔드 작업 전혀 필요 없음. DB 레벨은 만들어진 상태.
+
+#### 3-2. 의도치 않은 mockups.md 수정
+
+init.sql에서 `babies.feeding_type` 필드가 NOT NULL로 발견됨. mockups v2에 이 필드 누락됨. 보강:
+
+- 옵션 A로 결정 — 온보딩에 "수유 방식" 세그먼트(모유/분유/혼합) 추가
+- 근거: Phase 3 식사 예측 엔진의 핵심 입력, 수유 기록 화면 기본값 추천 가능
+
+#### 3-3. 구현 (커밋 2개)
+
+**`647d99a feat(babies): add api wrappers for baby profile`**
+
+- `src/features/babies/api.ts` 129줄
+- auth/api.ts 스타일 완전 복제 (JSDoc, throw 전략, 섹션 구분)
+- `createBaby(input)`: 앱→DB 매핑 포함 (gender `'male'/'female'` → `'M'/'F'`)
+- `getBabiesForCurrentUser()`: RLS가 자동 필터링, 생성순 오름차순
+
+**`6681880 chore(deps): add @react-native-community/datetimepicker`**
+
+- Expo SDK 54 호환 버전 `^8.4.4`
+- `app.json` plugins 배열에 자동 등록
+- 웹 미지원은 허용 (모바일 주 타겟)
+
+**`5931068 feat(onboarding): add baby profile setup flow`** — 오늘의 메인
+
+- `app/onboarding/_layout.tsx`: Stack wrapper, 헤더 없음, 뒤로 제스처 차단
+- `app/onboarding/baby-setup.tsx` (405줄):
+  - react-hook-form + zod + zodResolver (AuthForm 동일 패턴)
+  - react-query `useMutation(createBaby)`
+  - DateTimePicker iOS inline / Android default dialog
+  - 성별 세그먼트 2개, 수유 방식 세그먼트 3개 (기본값 `mixed`)
+  - D+N / 개월수 실시간 `useMemo` 계산
+  - 출생 체중 정규식 검증 (0.00~9.99)
+  - 성공 시 `setCurrentBabyId` + `router.replace('/')`
+- `app/index.tsx` 수정 (98줄):
+  - 세션+온보딩 이중 가드로 업그레이드
+  - `useQuery(getBabiesForCurrentUser)` 추가
+  - babies 빈 배열 → `<Redirect href="/onboarding/baby-setup" />`
+  - 첫 아기 자동 `currentBabyId` 세팅
+
+---
+
+### 실기기 검증 미완
+
+카페 Wi-Fi AP isolation으로 아이폰 연결 불가 → 온보딩 실동작 검증은 다음 세션(집에서)으로 연기.
+
+**코드 레벨 검증은 완료됨:**
+
+- tsc 에러 0
+- ESLint + Prettier 훅 통과
+- 패턴은 검증된 AuthForm 복제 → 구조적 안전
+
+---
+
+### 해소된 플래그
+
+- ✅ **T002 Metro 기동 실패** — 영속 해결
+- ✅ **T103b RLS** — 실기기 signUp으로 자연 검증 완료
+- ✅ 네비 바 "auth"/"index" 헤더 노출 — 전역 fix
+
+### 유지 중 플래그
+
+- 🔄 **온보딩 실동작 검증** — 집 Wi-Fi에서 아이폰 QR 재스캔
+- 🔄 **Kakao OAuth 실기기 deep-link 복귀** — 아직 미검증
+- 🔄 **로그아웃 왕복 검증** — 스킵됨
+
+---
+
+### 교훈 (앞으로 유지)
+
+1. **`npm install X --force` 금지** — 버전 올라감
+2. **독립 변경은 별도 커밋** — 실패 격리
+3. **실험적 검증 최소화** — 성공하면 바로 커밋
+4. **Metro timeout 2분 이상** — 60초는 짧을 수 있음
+5. **Claude Code 요약 신뢰 금지** — 원문 bash 출력만
+6. **Read/Grep/Glob/LS 툴 사용 금지** — `MEMORY.md`에 등재, bash만 사용
+7. **실기기 세션은 환경 안정된 곳에서** — 카페 Wi-Fi 피할 것
+
+---
+
+### 다음 세션 체크리스트 (집에서)
+
+1. Metro 기동: `npx expo start` (또는 `--offline`)
+2. 아이폰 Expo Go QR 재스캔 (새 IP 반영)
+3. **온보딩 플로우 실동작 검증:**
+   - 기존 계정 로그인 또는 새 계정 가입
+   - 자동으로 온보딩 리다이렉트 OK?
+   - 이름 / 생년월일 / 성별 / 수유 방식 / 체중 입력
+   - DatePicker iOS inline 동작 OK?
+   - D+N 실시간 계산 OK?
+   - "시작하기" → createBaby → 홈 이동 OK?
+4. **Supabase 대시보드 검증:**
+   - `babies` 테이블에 row 생성됨
+   - `caregivers` 테이블에 role='parent' row 자동 생성됨 (트리거 확인)
+5. 성공하면 → Phase 2 다음 화면으로 (기저귀 기록이 가장 단순)
+6. 실패하면 → 버그 분석 + 추가 커밋
+
+---
+
+### 진행률 평가
+
+- 어제 마감: 13%
+- 오늘 마감: **~35%**
+- 진전: +22% (하루 기록)
+
+T002 뚫리며 "쌓인 코드가 살아났음"이 체감 진전을 크게 견인함.
+
+### 커밋 (origin/main 반영 완료)
+
+```
+5931068  feat(onboarding): add baby profile setup flow
+6681880  chore(deps): add @react-native-community/datetimepicker
+647d99a  feat(babies): add api wrappers for baby profile
+d7e6110  fix(router): hide default stack header globally
+f6106fc  docs: log T002b success (metro patched, persisted)
+e922565  fix(build): patch metro-config for Windows ESM URL scheme
+d041c25  fix(nativewind): add preset to tailwind config
+```
