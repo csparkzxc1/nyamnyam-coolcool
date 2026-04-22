@@ -453,3 +453,110 @@
 
 - **T002b (신규 태스크)**: Expo 55 업그레이드 조사 및 시도 (별도 브랜치, 별도 타임박스)
 - 우선순위 재검토: T002b와 Phase 2 후속(T103b RLS, onboarding 등) 중 어느 쪽 먼저
+
+## 2026-04-22 - T002b 2차 시도 (성공, Metro 영속 기동)
+
+### 🎉 완전 해결
+
+**T002 (Metro 기동 실패) 한 달짜리 숙제 종료.** 원인 확정 → 패치 적용 → 영속화 → 커밋/푸시 완료.
+
+### 전략 재설계 (1차 시도 교훈 반영)
+
+1차 시도(이전 세션)의 실패 교훈:
+
+- `npm install metro-config --force` 실험이 버전 꼬임 초래
+- 미완성 상태로 커밋하면 위험 → 전량 원복
+- **"최소 변경 + 검증 실험 없이 한 번에"** 원칙 수립
+
+2차 시도 전략:
+
+- 독립적 변경(NativeWind preset)을 먼저 별도 커밋 → 실패해도 남음
+- patch-package 흐름은 어제 검증된 그대로 반복
+- 중간 검증 실험 (`npm install --force` 같은) 완전 제거
+- 성공 확인 직후 바로 커밋
+
+### 오늘 변경 내역 (3커밋)
+
+- **`7572ef6 feat(home): add session guard and placeholder to index`**
+  - `app/index.tsx` 세션 가드 + 홈 플레이스홀더
+  - 어제 마무리 못 한 작업 종료
+
+- **`d041c25 fix(nativewind): add preset to tailwind config`**
+  - `tailwind.config.js`에 `presets: [require('nativewind/preset')]` 1줄 추가
+  - Sprint 0 세팅 미비였던 것을 뒤늦게 fix
+  - `withNativeWind()` 호출 시 "NativeWind preset 없음" 에러 해소
+
+- **`e922565 fix(build): patch metro-config for Windows ESM URL scheme`**
+  - `node_modules/metro-config/src/loadConfig.js` 292줄 수정 (patch-package로 영속화)
+  - `package.json` scripts에 `postinstall: patch-package` 추가
+  - `patches/metro-config+0.83.3.patch` 생성 및 커밋
+  - `patch-package@^8.0.1` devDependency 추가
+
+### Metro 기동 검증
+
+```
+timeout 120 npm start 2>&1 | cat
+
+[출력]
+Starting project at C:\Users\admin\Desktop\nyamnyam-coolcool
+Starting Metro Bundler
+Waiting on http://localhost:8081
+Logs for your project will appear below.
+```
+
+에러 0, QR 대기 상태 진입 확인. T202까지 쌓인 UI 전체 실기기 검증 준비 완료.
+
+### 패치 내용 (참고용)
+
+```diff
+--- a/node_modules/metro-config/src/loadConfig.js
++++ b/node_modules/metro-config/src/loadConfig.js
+@@ -289,7 +289,10 @@ async function loadConfigFile(absolutePath) {
+        }
+      } catch (e) {
+        try {
+-        const configModule = await import(absolutePath);
++        const importPath = process.platform === 'win32'
++          ? require('url').pathToFileURL(absolutePath).href
++          : absolutePath;
++        const configModule = await import(importPath);
+          config = await configModule.default;
+        } catch (error) {
+          let prefix = `Error loading Metro config at: ${absolutePath}\n`;
+```
+
+**원리:** Windows 절대경로 `C:\...`를 ESM 동적 `import()`에 그대로 넘기면 Node가 `C:`를 "처음 보는 프로토콜"로 오해함. `pathToFileURL()`로 `file:///C:/...` 형식으로 변환해 전달하면 정상 인식.
+
+### 영속성 보장
+
+- `package.json`의 `postinstall: patch-package` 스크립트로 `npm install` 때마다 자동 재적용
+- `patches/metro-config+0.83.3.patch` 파일이 git에 포함 → 팀/CI 공유
+- metro-config 버전 업그레이드 시 patch 재검증 필요 (경고 출력됨)
+
+### 해소된 미해결 플래그
+
+- ✅ **T002 Metro 기동 실패** — 영속 해결
+- 🔄 **T103b RLS** — 이제 실제 JWT로 자연 검증 가능해짐 (다음 세션 과제)
+
+### 커밋 요약 (origin/main 반영 완료)
+
+```
+e922565  fix(build): patch metro-config for Windows ESM URL scheme
+d041c25  fix(nativewind): add preset to tailwind config
+7572ef6  feat(home): add session guard and placeholder to index
+```
+
+### 다음
+
+- **T002b 완전 종료.** 별도 태스크로 분리했던 것 main에 흡수
+- **실기기 검증 세션**: T202 로그인 화면, Kakao OAuth, 이메일 signIn/signUp, T103b RLS
+- **Phase 2 본격 진입**: 아기 프로필 등록 → 홈 대시보드 → 기록 화면들 (mockups.md 순서)
+- 이제 "기록 → 즉시 검증" 사이클 가능. 속도 ↑.
+
+### 교훈 (앞으로 유지)
+
+1. **`npm install X --force` 금지** — 원 의도 벗어나 버전 변경 위험
+2. **독립 가능한 변경은 먼저 커밋** — 실패 격리
+3. **실험적 검증 최소화** — 패치 성공 확인 후 바로 커밋, 재설치 실험 금지
+4. **60초 타임아웃 짧을 수 있음** — Metro 번들링 2분 주는 게 안전
+5. **Claude Code 요약 신뢰 금지** — 항상 원문 bash 출력 확인
