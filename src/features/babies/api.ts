@@ -10,10 +10,11 @@
  * Callers use try/catch or React Query .catch().
  *
  * RLS notes:
- * - babies INSERT requires `created_by = auth.uid()` (handled by supabase.auth context).
- * - After INSERT, a DB trigger (`auto_register_caregiver`) automatically creates a
- *   caregiver row with role='parent'. Client does NOT need to insert caregivers manually.
- * - babies SELECT is filtered to only babies where the current user is a caregiver.
+ * - babies / caregivers are created atomically via the `create_baby_with_caregiver` RPC.
+ *   The RPC is SECURITY DEFINER and performs both inserts in one transaction, so the
+ *   caregiver row exists before any follow-up SELECT — eliminating the race condition
+ *   that previously caused 42501 errors or silent empty fetches on a user's first baby.
+ * - babies SELECT is filtered by RLS to only babies where the current user is a caregiver.
  */
 
 import type { Database } from '@/lib/database.types';
@@ -24,7 +25,6 @@ import { supabase } from '@/lib/supabase';
 // ============================================================
 
 type BabyRow = Database['public']['Tables']['babies']['Row'];
-type BabyInsert = Database['public']['Tables']['babies']['Insert'];
 
 /**
  * App-level gender values. Mapped to DB 'M'/'F'.
@@ -75,32 +75,30 @@ function genderToDb(gender: Gender): 'M' | 'F' {
 /**
  * Create a new baby profile for the currently authenticated user.
  *
- * The current user is automatically registered as the parent caregiver
- * by a DB trigger (`auto_register_caregiver`). No extra client work needed.
+ * Delegates to the `create_baby_with_caregiver` DB function, which atomically
+ * inserts a baby row and a matching caregiver row (role='parent') in the same
+ * transaction. This is required because babies SELECT RLS is caregiver-based —
+ * doing the two inserts separately (or via an AFTER INSERT trigger) creates a
+ * race where the caregiver row is not yet visible when the baby row is read back.
  *
  * @throws When not authenticated, or on RLS / validation errors.
  */
 export async function createBaby(input: CreateBabyInput): Promise<Baby> {
-  const { data: userData, error: userError } = await supabase.auth.getUser();
-  if (userError) throw userError;
-  const user = userData.user;
-  if (!user) {
-    throw new Error('Not authenticated');
-  }
-
-  const payload: BabyInsert = {
-    name: input.name.trim(),
-    birth_date: input.birthDate,
-    gender: genderToDb(input.gender),
-    feeding_type: input.feedingType,
-    weight_kg: input.weightKg ?? null,
-    created_by: user.id,
-  };
-
-  const { data, error } = await supabase.from('babies').insert(payload).select().single();
+  const { data, error } = await supabase.rpc('create_baby_with_caregiver', {
+    p_name: input.name.trim(),
+    p_birth_date: input.birthDate,
+    p_gender: genderToDb(input.gender),
+    p_feeding_type: input.feedingType,
+    p_weight_kg: input.weightKg ?? null,
+  });
 
   if (error) throw error;
-  return data;
+  if (!data) {
+    throw new Error('create_baby_with_caregiver returned no data');
+  }
+  // The function returns a single row (public.babies). supabase-js types it
+  // based on generated Database types; cast to Baby for the caller.
+  return data as unknown as Baby;
 }
 
 // ============================================================

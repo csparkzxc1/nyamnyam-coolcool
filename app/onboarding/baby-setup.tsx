@@ -17,13 +17,13 @@ import { Platform, ScrollView, Text, TextInput, TouchableOpacity, View } from 'r
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { router } from 'expo-router';
 import { Controller, useForm } from 'react-hook-form';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { z } from 'zod';
 
-import { createBaby, type FeedingType, type Gender } from '@/features/babies/api';
+import { createBaby, type Baby, type FeedingType, type Gender } from '@/features/babies/api';
 import { useSessionStore } from '@/stores/sessionStore';
 
 // ============================================================
@@ -101,6 +101,7 @@ function calculateAgeLabel(birthDate: Date | undefined): string | null {
 
 export default function BabySetupScreen() {
   const setCurrentBabyId = useSessionStore((s) => s.setCurrentBabyId);
+  const queryClient = useQueryClient();
   const [formError, setFormError] = useState<string | null>(null);
   const [datePickerOpen, setDatePickerOpen] = useState(false);
 
@@ -136,8 +137,10 @@ export default function BabySetupScreen() {
         weightKg: parsedWeight,
       });
     },
-    onSuccess: (baby) => {
+    onSuccess: async (baby) => {
+      queryClient.setQueryData<Baby[]>(['babies', 'current-user'], (old) => [...(old ?? []), baby]);
       setCurrentBabyId(baby.id);
+      await queryClient.invalidateQueries({ queryKey: ['babies', 'current-user'] });
       router.replace('/');
     },
     onError: (err) => {
