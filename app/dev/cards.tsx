@@ -8,6 +8,8 @@ import { BabyProfileHeader } from '@/components/home/BabyProfileHeader';
 import { NextActionCard } from '@/components/home/NextActionCard';
 import type { QuickLogKind } from '@/components/home/QuickLogButton';
 import { QuickLogGrid } from '@/components/home/QuickLogGrid';
+import { TipCard } from '@/components/home/TipCard';
+import { pickDailyTip } from '@/data/tipMessages';
 
 const SHOW_REASONING_MODAL = () =>
   Alert.alert('명세 모달', '"왜 이렇게 예측했나요?" 모달 - 추후 구현 예정');
@@ -20,7 +22,6 @@ function formatTimer(secondsElapsed: number): string {
   return `${mm}:${ss}`;
 }
 
-// Mock baby for visual verification only.
 const MOCK_BABY = {
   name: '윤서아',
   birthDate: new Date('2026-03-12T00:00:00'),
@@ -46,6 +47,8 @@ export default function CardsDevScreen() {
     }
   };
 
+  const dailyTip = pickDailyTip();
+
   return (
     <SafeAreaView className="flex-1 bg-bg-page" edges={['top']}>
       <ScrollView
@@ -55,7 +58,7 @@ export default function CardsDevScreen() {
         <View>
           <Text className="font-display text-2xl text-ink-primary">홈 컴포넌트 · dev</Text>
           <Text className="mt-1 text-sm text-ink-secondary">
-            T301 카드 + T302 그리드 + T303 헤더 시각 검증
+            T301 카드 + T302 그리드 + T303 헤더 + T305 팁 시각 검증
           </Text>
         </View>
 
@@ -63,14 +66,12 @@ export default function CardsDevScreen() {
         <View style={{ gap: 12 }}>
           <Text className="font-display text-base text-ink-secondary">BabyProfileHeader</Text>
 
-          {/* 가족 1명만 — 배지 숨김 */}
           <BabyProfileHeader
             name={MOCK_BABY.name}
             birthDate={MOCK_BABY.birthDate}
             onPress={SHOW_PROFILE_EDIT}
           />
 
-          {/* 가족 2명 이상 — 배지 표시 */}
           <BabyProfileHeader
             name={MOCK_BABY.name}
             birthDate={MOCK_BABY.birthDate}
@@ -78,7 +79,6 @@ export default function CardsDevScreen() {
             onPress={SHOW_PROFILE_EDIT}
           />
 
-          {/* 신생아 (~1개월 이내) — 일수만 */}
           <BabyProfileHeader
             name="준"
             birthDate={new Date('2026-04-15T00:00:00')}
@@ -164,6 +164,27 @@ export default function CardsDevScreen() {
               bath: '다음: 오늘 저녁',
             }}
             onPress={handlePress}
+          />
+        </View>
+
+        {/* === T305 TipCard === */}
+        <View style={{ gap: 12 }}>
+          <Text className="font-display text-base text-ink-secondary">TipCard</Text>
+
+          {/* 오늘의 메시지 (날짜 기반 픽) */}
+          <TipCard label={dailyTip.label} message={dailyTip.message} />
+
+          {/* prototype 톤 메시지 (사실 기반 — T401 이후에 동적 생성될 형태) */}
+          <TipCard
+            label="이번 주 변화"
+            message={`${MOCK_BABY.name}가 지난주보다 밤잠을 평균 30분 더 자고 있어요.\n덕분에 한숨 돌리네요.`}
+          />
+
+          {/* 다른 아이콘 변형 */}
+          <TipCard
+            icon="☀️"
+            label="오늘의 작은 팁"
+            message="아기가 깨어 있을 때 배밀이 시간을 짧게라도\n가져보세요. 목 근육 발달에 도움이 됩니다."
           />
         </View>
       </ScrollView>
