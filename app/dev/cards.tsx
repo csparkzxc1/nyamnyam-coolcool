@@ -4,6 +4,7 @@ import { ScrollView, Text, View, Alert } from 'react-native';
 
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { BabyProfileHeader } from '@/components/home/BabyProfileHeader';
 import { NextActionCard } from '@/components/home/NextActionCard';
 import type { QuickLogKind } from '@/components/home/QuickLogButton';
 import { QuickLogGrid } from '@/components/home/QuickLogGrid';
@@ -11,14 +12,21 @@ import { QuickLogGrid } from '@/components/home/QuickLogGrid';
 const SHOW_REASONING_MODAL = () =>
   Alert.alert('명세 모달', '"왜 이렇게 예측했나요?" 모달 - 추후 구현 예정');
 
+const SHOW_PROFILE_EDIT = () => Alert.alert('프로필 편집', '아기 정보 편집 - 추후 구현 예정');
+
 function formatTimer(secondsElapsed: number): string {
   const mm = String(Math.floor(secondsElapsed / 60)).padStart(2, '0');
   const ss = String(secondsElapsed % 60).padStart(2, '0');
   return `${mm}:${ss}`;
 }
 
+// Mock baby for visual verification only.
+const MOCK_BABY = {
+  name: '윤서아',
+  birthDate: new Date('2026-03-12T00:00:00'),
+};
+
 export default function CardsDevScreen() {
-  // Demo grid state — independent from real loggingStore for now.
   const [activeKind, setActiveKind] = useState<QuickLogKind | null>(null);
   const [secondsElapsed, setSecondsElapsed] = useState(0);
 
@@ -46,7 +54,37 @@ export default function CardsDevScreen() {
       >
         <View>
           <Text className="font-display text-2xl text-ink-primary">홈 컴포넌트 · dev</Text>
-          <Text className="mt-1 text-sm text-ink-secondary">T301 카드 + T302 그리드 시각 검증</Text>
+          <Text className="mt-1 text-sm text-ink-secondary">
+            T301 카드 + T302 그리드 + T303 헤더 시각 검증
+          </Text>
+        </View>
+
+        {/* === T303 BabyProfileHeader === */}
+        <View style={{ gap: 12 }}>
+          <Text className="font-display text-base text-ink-secondary">BabyProfileHeader</Text>
+
+          {/* 가족 1명만 — 배지 숨김 */}
+          <BabyProfileHeader
+            name={MOCK_BABY.name}
+            birthDate={MOCK_BABY.birthDate}
+            onPress={SHOW_PROFILE_EDIT}
+          />
+
+          {/* 가족 2명 이상 — 배지 표시 */}
+          <BabyProfileHeader
+            name={MOCK_BABY.name}
+            birthDate={MOCK_BABY.birthDate}
+            caregiverCount={2}
+            onPress={SHOW_PROFILE_EDIT}
+          />
+
+          {/* 신생아 (~1개월 이내) — 일수만 */}
+          <BabyProfileHeader
+            name="준"
+            birthDate={new Date('2026-04-15T00:00:00')}
+            caregiverCount={3}
+            onPress={SHOW_PROFILE_EDIT}
+          />
         </View>
 
         {/* === T301 NextActionCard 시나리오 === */}
