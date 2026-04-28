@@ -12,6 +12,11 @@ import { QuickLogGrid } from '@/components/home/QuickLogGrid';
 import { Timeline } from '@/components/home/Timeline';
 import { TipCard } from '@/components/home/TipCard';
 import { pickDailyTip } from '@/data/tipMessages';
+import {
+  predictNextFeed,
+  type PredictionConfidence,
+  type PredictionResult,
+} from '@/lib/prediction';
 import { formatTimeAgo } from '@/lib/timeAgo';
 import type { TimelineEvent } from '@/lib/timelineEvents';
 
@@ -35,14 +40,11 @@ function formatTimer(secondsElapsed: number): string {
   return `${mm}:${ss}`;
 }
 
-// Mock baby (used as fallback when session has no baby attached yet — should
-// not normally happen because app/index.tsx redirects to onboarding first).
 const FALLBACK_BABY = {
   name: '아기',
   birthDate: new Date(),
 };
 
-// Today's mock events — replaces real DB data until T501.
 function buildMockEvents(referenceDay: Date): TimelineEvent[] {
   const at = (h: number, m: number) => {
     const d = new Date(referenceDay);
@@ -69,18 +71,23 @@ interface NextActionView {
   primary: string;
   primaryEm?: string;
   secondary?: string;
+  confidence: PredictionConfidence;
 }
 
 /**
- * Derives the NextActionCard view from today's events. This is a placeholder
- * for the prediction engine that lands in T401 — for now it just maps
- * "minutes since last feed" to a scenario with hardcoded thresholds.
+ * Shapes the prediction result into the NextActionCard's view-level props.
+ *
+ * The prediction itself lives in src/lib/prediction.ts — this function only
+ * formats the numbers into Korean text and chooses the human-readable label
+ * for each scenario.
  */
-function deriveNextAction(events: readonly TimelineEvent[], now: Date): NextActionView {
-  // Active sleep wins over everything else
-  const activeSleep = events.find((e) => e.kind === 'sleep' && !e.endedAt);
-  if (activeSleep) {
-    const minutesSleeping = differenceInMinutes(now, activeSleep.startedAt);
+function viewFromPrediction(
+  prediction: PredictionResult,
+  events: readonly TimelineEvent[],
+  now: Date,
+): NextActionView {
+  if (prediction.scenario === 'sleeping' && prediction.activeSleepStartedAt) {
+    const minutesSleeping = differenceInMinutes(now, prediction.activeSleepStartedAt);
     const hours = Math.floor(minutesSleeping / 60);
     const mins = minutesSleeping % 60;
     return {
@@ -89,57 +96,59 @@ function deriveNextAction(events: readonly TimelineEvent[], now: Date): NextActi
       primary: hours > 0 ? `${hours}시간 ${mins}분째` : `${mins}분째`,
       primaryEm: '자고 있는 중',
       secondary: '평균 낮잠은 1~2시간 · 편안한 속도예요',
+      confidence: prediction.confidence,
     };
   }
 
-  const feeds = events.filter((e) => e.kind === 'feed');
-  const lastFeed = feeds[feeds.length - 1];
-
-  if (!lastFeed) {
+  if (prediction.lastFeedAt === null) {
     return {
       scenario: 'normal',
       label: '오늘 첫 수유',
       primary: '준비됐어요',
       secondary: '첫 수유를 기록해주세요',
+      confidence: prediction.confidence,
     };
   }
 
-  const minutesSince = differenceInMinutes(now, lastFeed.startedAt);
-  const lastFeedAgo = formatTimeAgo(lastFeed.startedAt, now);
+  const lastFeedAgo = formatTimeAgo(prediction.lastFeedAt, now);
+  const nextAt = prediction.nextAt;
 
-  if (minutesSince < 120) {
-    const minutesUntilNext = 180 - minutesSince;
+  if (prediction.scenario === 'normal' && nextAt) {
+    const minutesUntilNext = differenceInMinutes(nextAt, now);
     return {
       scenario: 'normal',
       label: '다음 수유 예상',
       primary: lastFeedAgo,
       primaryEm: `(약 ${minutesUntilNext}분 후 다음 수유)`,
       secondary: `마지막 수유 ${lastFeedAgo}`,
+      confidence: prediction.confidence,
     };
   }
 
-  if (minutesSince < 180) {
+  if (prediction.scenario === 'warning') {
     return {
       scenario: 'warning',
       label: '곧 다음 수유',
-      primary: `${Math.floor(minutesSince / 60)}시간 ${minutesSince % 60}분 전`,
+      primary: lastFeedAgo,
       primaryEm: '(예상 시각 도달)',
       secondary: `마지막 수유 ${lastFeedAgo}`,
+      confidence: prediction.confidence,
     };
   }
 
+  // alert
+  const minutesSinceLast = differenceInMinutes(now, prediction.lastFeedAt);
+  const hoursSince = Math.floor(minutesSinceLast / 60);
   return {
     scenario: 'alert',
-    label: `마지막 수유 후 ${Math.floor(minutesSince / 60)}시간`,
+    label: `마지막 수유 후 ${hoursSince}시간`,
     primary: '지금',
     primaryEm: '(슬슬 챙겨주세요)',
     secondary: '신생아는 보통 3시간마다 수유해요',
+    confidence: prediction.confidence,
   };
 }
 
-/**
- * Computes per-kind "last at" text for the QuickLogGrid.
- */
 function deriveLastAt(
   events: readonly TimelineEvent[],
   now: Date,
@@ -160,21 +169,14 @@ export default function HomeScreen() {
   // need to read it directly here — baby/event data hooks (T501) will pull
   // user context from the session store as needed.
 
-  // For now, baby info is hardcoded — wiring it through useQuery for the
-  // actual logged-in baby is part of T501. Using a deterministic fallback
-  // keeps the home stable until then.
   const baby = FALLBACK_BABY;
 
-  // Live "now" tick every minute so time-ago text and scenario thresholds
-  // refresh without a full reload.
   const [now, setNow] = useState<Date>(() => new Date());
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 60_000);
     return () => clearInterval(id);
   }, []);
 
-  // Active timer for the QuickLogGrid (visual only — Supabase write-through
-  // is T501 territory).
   const [activeKind, setActiveKind] = useState<QuickLogKind | null>(null);
   const [secondsElapsed, setSecondsElapsed] = useState(0);
   useEffect(() => {
@@ -184,7 +186,22 @@ export default function HomeScreen() {
   }, [activeKind]);
 
   const events = useMemo(() => buildMockEvents(now), [now]);
-  const nextAction = useMemo(() => deriveNextAction(events, now), [events, now]);
+
+  const prediction = useMemo(
+    () =>
+      predictNextFeed({
+        events,
+        babyBirthDate: baby.birthDate,
+        now,
+      }),
+    [events, baby.birthDate, now],
+  );
+
+  const nextAction = useMemo(
+    () => viewFromPrediction(prediction, events, now),
+    [prediction, events, now],
+  );
+
   const lastAt = useMemo(() => deriveLastAt(events, now), [events, now]);
   const dailyTip = useMemo(() => pickDailyTip(now), [now]);
 
@@ -198,8 +215,6 @@ export default function HomeScreen() {
     }
   };
 
-  // Caregiver count is mocked to 1 (solo) until family sharing lands in a
-  // later sprint — header will hide its badge automatically at < 2.
   const caregiverCount = 1;
 
   return (
@@ -208,7 +223,6 @@ export default function HomeScreen() {
         contentContainerStyle={{ padding: 20, gap: 18, paddingBottom: 32 }}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header */}
         <BabyProfileHeader
           name={baby.name}
           birthDate={baby.birthDate}
@@ -217,18 +231,16 @@ export default function HomeScreen() {
           now={now}
         />
 
-        {/* Hero: next action prediction */}
         <NextActionCard
           scenario={nextAction.scenario}
           label={nextAction.label}
           primary={nextAction.primary}
           primaryEm={nextAction.primaryEm}
           secondary={nextAction.secondary}
-          confidence="learning"
+          confidence={nextAction.confidence}
           onLongPress={SHOW_REASONING_MODAL}
         />
 
-        {/* Quick log grid */}
         <QuickLogGrid
           activeKind={activeKind}
           activeTimer={formatTimer(secondsElapsed)}
@@ -236,7 +248,6 @@ export default function HomeScreen() {
           onPress={handleQuickPress}
         />
 
-        {/* Today timeline */}
         <View
           style={{
             backgroundColor: '#FFFFFF',
@@ -247,7 +258,6 @@ export default function HomeScreen() {
           <Timeline events={events} now={now} onEventPress={SHOW_EVENT_DETAIL} />
         </View>
 
-        {/* Tip / encouragement */}
         <TipCard label={dailyTip.label} message={dailyTip.message} />
       </ScrollView>
     </SafeAreaView>
