@@ -8,13 +8,24 @@ import { BabyProfileHeader } from '@/components/home/BabyProfileHeader';
 import { NextActionCard } from '@/components/home/NextActionCard';
 import type { QuickLogKind } from '@/components/home/QuickLogButton';
 import { QuickLogGrid } from '@/components/home/QuickLogGrid';
+import { Timeline } from '@/components/home/Timeline';
 import { TipCard } from '@/components/home/TipCard';
 import { pickDailyTip } from '@/data/tipMessages';
+import type { TimelineEvent } from '@/lib/timelineEvents';
 
 const SHOW_REASONING_MODAL = () =>
   Alert.alert('명세 모달', '"왜 이렇게 예측했나요?" 모달 - 추후 구현 예정');
 
 const SHOW_PROFILE_EDIT = () => Alert.alert('프로필 편집', '아기 정보 편집 - 추후 구현 예정');
+
+const SHOW_EVENT_DETAIL = (event: TimelineEvent) =>
+  Alert.alert(
+    '이벤트',
+    `${event.kind} · ${event.startedAt.toLocaleTimeString('ko-KR', {
+      hour: '2-digit',
+      minute: '2-digit',
+    })}`,
+  );
 
 function formatTimer(secondsElapsed: number): string {
   const mm = String(Math.floor(secondsElapsed / 60)).padStart(2, '0');
@@ -26,6 +37,37 @@ const MOCK_BABY = {
   name: '윤서아',
   birthDate: new Date('2026-03-12T00:00:00'),
 };
+
+// Today's mock events — a realistic newborn day pattern.
+function buildMockEvents(referenceDay: Date): TimelineEvent[] {
+  const at = (h: number, m: number) => {
+    const d = new Date(referenceDay);
+    d.setHours(h, m, 0, 0);
+    return d;
+  };
+  return [
+    { id: '1', kind: 'feed', startedAt: at(6, 0) },
+    { id: '2', kind: 'diaper', startedAt: at(7, 30) },
+    {
+      id: '3',
+      kind: 'sleep',
+      startedAt: at(8, 0),
+      endedAt: at(10, 0),
+    },
+    { id: '4', kind: 'feed', startedAt: at(10, 30) },
+    { id: '5', kind: 'diaper', startedAt: at(12, 0) },
+    {
+      id: '6',
+      kind: 'sleep',
+      startedAt: at(13, 0),
+      endedAt: at(15, 0),
+    },
+    { id: '7', kind: 'feed', startedAt: at(15, 30) },
+    { id: '8', kind: 'bath', startedAt: at(17, 0) },
+    { id: '9', kind: 'diaper', startedAt: at(18, 0) },
+    { id: '10', kind: 'feed', startedAt: at(19, 0) },
+  ];
+}
 
 export default function CardsDevScreen() {
   const [activeKind, setActiveKind] = useState<QuickLogKind | null>(null);
@@ -48,6 +90,8 @@ export default function CardsDevScreen() {
   };
 
   const dailyTip = pickDailyTip();
+  const today = new Date();
+  const mockEvents = buildMockEvents(today);
 
   return (
     <SafeAreaView className="flex-1 bg-bg-page" edges={['top']}>
@@ -58,7 +102,7 @@ export default function CardsDevScreen() {
         <View>
           <Text className="font-display text-2xl text-ink-primary">홈 컴포넌트 · dev</Text>
           <Text className="mt-1 text-sm text-ink-secondary">
-            T301 카드 + T302 그리드 + T303 헤더 + T305 팁 시각 검증
+            T301 + T302 + T303 + T304 + T305 시각 검증
           </Text>
         </View>
 
@@ -87,7 +131,7 @@ export default function CardsDevScreen() {
           />
         </View>
 
-        {/* === T301 NextActionCard 시나리오 === */}
+        {/* === T301 NextActionCard === */}
         <View style={{ gap: 16 }}>
           <Text className="font-display text-base text-ink-secondary">NextActionCard</Text>
 
@@ -142,7 +186,22 @@ export default function CardsDevScreen() {
           />
         </View>
 
-        {/* === T302 QuickLogGrid (interactive) === */}
+        {/* === T304 Timeline === */}
+        <View style={{ gap: 12 }}>
+          <Text className="font-display text-base text-ink-secondary">Timeline · 24h</Text>
+
+          <View
+            style={{
+              backgroundColor: '#FFFFFF',
+              borderRadius: 16,
+              padding: 16,
+            }}
+          >
+            <Timeline events={mockEvents} now={today} onEventPress={SHOW_EVENT_DETAIL} />
+          </View>
+        </View>
+
+        {/* === T302 QuickLogGrid === */}
         <View style={{ gap: 12 }}>
           <Text className="font-display text-base text-ink-secondary">
             QuickLogGrid · 탭해서 시작/종료
@@ -171,16 +230,13 @@ export default function CardsDevScreen() {
         <View style={{ gap: 12 }}>
           <Text className="font-display text-base text-ink-secondary">TipCard</Text>
 
-          {/* 오늘의 메시지 (날짜 기반 픽) */}
           <TipCard label={dailyTip.label} message={dailyTip.message} />
 
-          {/* prototype 톤 메시지 (사실 기반 — T401 이후에 동적 생성될 형태) */}
           <TipCard
             label="이번 주 변화"
             message={`${MOCK_BABY.name}가 지난주보다 밤잠을 평균 30분 더 자고 있어요.\n덕분에 한숨 돌리네요.`}
           />
 
-          {/* 다른 아이콘 변형 */}
           <TipCard
             icon="☀️"
             label="오늘의 작은 팁"
