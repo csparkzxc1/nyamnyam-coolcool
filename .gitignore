@@ -43,3 +43,7 @@ yarn-error.*
 # Supabase CLI
 supabase/.temp/
 supabase/.branches/
+
+# Local backup files (created during manual file edits)
+*.bak
+*.bak2
