@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 
 import { ActivityIndicator, Alert, ScrollView, Text, View } from 'react-native';
 
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { differenceInMinutes } from 'date-fns';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -13,6 +14,15 @@ import { Timeline } from '@/components/home/Timeline';
 import { TipCard } from '@/components/home/TipCard';
 import { pickDailyTip } from '@/data/tipMessages';
 import { useCurrentBaby } from '@/features/babies/hooks';
+import {
+  createBathRecord,
+  createDiaperRecord,
+  createFeedingRecord,
+  createSleepRecord,
+  updateFeedingRecord,
+  updateSleepRecord,
+  type Baby,
+} from '@/features/logging/api';
 import { useEvents } from '@/features/logging/hooks';
 import {
   predictNextFeed,
@@ -21,6 +31,7 @@ import {
 } from '@/lib/prediction';
 import { formatTimeAgo } from '@/lib/timeAgo';
 import type { TimelineEvent } from '@/lib/timelineEvents';
+import { useLoggingStore } from '@/stores/loggingStore';
 
 const SHOW_REASONING_MODAL = () =>
   Alert.alert('명세 모달', '"왜 이렇게 예측했나요?" 모달 - 추후 구현 예정');
@@ -36,10 +47,33 @@ const SHOW_EVENT_DETAIL = (event: TimelineEvent) =>
     })}`,
   );
 
+const FEED_FAILED = () => Alert.alert('기록 실패', '잠시 후 다시 시도해주세요');
+
 function formatTimer(secondsElapsed: number): string {
   const mm = String(Math.floor(secondsElapsed / 60)).padStart(2, '0');
   const ss = String(secondsElapsed % 60).padStart(2, '0');
   return `${mm}:${ss}`;
+}
+
+/**
+ * Map app-level baby.feeding_type to a sensible feeding_records.type
+ * default for the timer-style quick log. Left/right breast modal will
+ * refine this in a later sprint; for now `breast_left` is the conventional
+ * default in the parenting-app space.
+ */
+function deriveFeedType(feedingType: string): 'breast_left' | 'formula' {
+  if (feedingType === 'formula') return 'formula';
+  return 'breast_left';
+}
+
+/**
+ * Night sleeps roll over from late evening to early morning. Treating
+ * 18:00–07:00 as 'night' avoids forcing the parent to choose for the
+ * common case; a manual edit can override later.
+ */
+function deriveSleepType(now: Date): 'nap' | 'night' {
+  const h = now.getHours();
+  return h >= 18 || h < 7 ? 'night' : 'nap';
 }
 
 interface NextActionView {
@@ -51,13 +85,6 @@ interface NextActionView {
   confidence: PredictionConfidence;
 }
 
-/**
- * Shapes the prediction result into the NextActionCard's view-level props.
- *
- * The prediction itself lives in src/lib/prediction.ts — this function only
- * formats the numbers into Korean text and chooses the human-readable label
- * for each scenario.
- */
 function viewFromPrediction(
   prediction: PredictionResult,
   events: readonly TimelineEvent[],
@@ -151,15 +178,8 @@ export default function HomeScreen() {
     return () => clearInterval(id);
   }, []);
 
-  const [activeKind, setActiveKind] = useState<QuickLogKind | null>(null);
   const [secondsElapsed, setSecondsElapsed] = useState(0);
-  useEffect(() => {
-    if (activeKind === null) return;
-    const id = setInterval(() => setSecondsElapsed((s) => s + 1), 1000);
-    return () => clearInterval(id);
-  }, [activeKind]);
 
-  // T501: real data hooks (replaces FALLBACK_BABY + buildMockEvents)
   const babyQuery = useCurrentBaby();
   const eventsQuery = useEvents(babyQuery.data?.id ?? null);
 
@@ -168,12 +188,92 @@ export default function HomeScreen() {
     [eventsQuery.data],
   );
 
+  // Active timer state — driven by Zustand for cross-screen continuity.
+  const activeTimer = useLoggingStore((s) => s.activeTimer);
+  const startTimer = useLoggingStore((s) => s.startTimer);
+  const attachRecordId = useLoggingStore((s) => s.attachRecordId);
+  const stopTimer = useLoggingStore((s) => s.stopTimer);
+
+  const activeKind = activeTimer?.kind ?? null;
+
+  // Tick the elapsed counter only while a timer is active.
+  useEffect(() => {
+    if (activeTimer === null) {
+      setSecondsElapsed(0);
+      return;
+    }
+    const tick = () =>
+      setSecondsElapsed(Math.floor((Date.now() - activeTimer.startedAt.getTime()) / 1000));
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [activeTimer]);
+
+  const queryClient = useQueryClient();
+  const babyId = babyQuery.data?.id ?? null;
+  const invalidateEvents = () => {
+    if (babyId) {
+      queryClient.invalidateQueries({ queryKey: ['events', babyId] });
+    }
+  };
+
+  // ----- mutations: feed -----
+  const feedStartMutation = useMutation({
+    mutationFn: createFeedingRecord,
+    onSuccess: (record) => {
+      attachRecordId('feed', record.id);
+      invalidateEvents();
+    },
+    onError: () => {
+      stopTimer();
+      FEED_FAILED();
+    },
+  });
+
+  const feedStopMutation = useMutation({
+    mutationFn: ({ recordId, endAt }: { recordId: string; endAt: Date }) =>
+      updateFeedingRecord(recordId, { end_at: endAt.toISOString() }),
+    onSuccess: invalidateEvents,
+    onError: FEED_FAILED,
+  });
+
+  // ----- mutations: sleep -----
+  const sleepStartMutation = useMutation({
+    mutationFn: createSleepRecord,
+    onSuccess: (record) => {
+      attachRecordId('sleep', record.id);
+      invalidateEvents();
+    },
+    onError: () => {
+      stopTimer();
+      FEED_FAILED();
+    },
+  });
+
+  const sleepStopMutation = useMutation({
+    mutationFn: ({ recordId, endAt }: { recordId: string; endAt: Date }) =>
+      updateSleepRecord(recordId, { end_at: endAt.toISOString() }),
+    onSuccess: invalidateEvents,
+    onError: FEED_FAILED,
+  });
+
+  // ----- mutations: diaper, bath (point-in-time, no timer) -----
+  const diaperMutation = useMutation({
+    mutationFn: createDiaperRecord,
+    onSuccess: invalidateEvents,
+    onError: FEED_FAILED,
+  });
+
+  const bathMutation = useMutation({
+    mutationFn: createBathRecord,
+    onSuccess: invalidateEvents,
+    onError: FEED_FAILED,
+  });
+
   const prediction = useMemo<PredictionResult>(
     () =>
       predictNextFeed({
         events,
-        // While baby is loading, predictNextFeed runs with a placeholder date.
-        // Result is unused because we early-return below before render.
         babyBirthDate: babyQuery.data ? new Date(babyQuery.data.birth_date) : new Date(),
         now,
       }),
@@ -191,22 +291,108 @@ export default function HomeScreen() {
   // ============================================================
   // Handlers
   // ============================================================
+
+  /**
+   * Handle a quick-log button tap. Branches by kind:
+   *  - feed/sleep: timer pattern (1st tap = start, 2nd tap = stop)
+   *  - diaper: opens 3-button alert to choose type, then inserts
+   *  - bath: instant insert
+   */
   const handleQuickPress = (kind: QuickLogKind) => {
-    if (activeKind === kind) {
-      setActiveKind(null);
-      setSecondsElapsed(0);
-    } else {
-      setActiveKind(kind);
-      setSecondsElapsed(0);
+    if (!babyQuery.data) return;
+    const baby: Baby = babyQuery.data;
+
+    // ----- timer kinds: feed / sleep -----
+    if (kind === 'feed' || kind === 'sleep') {
+      // Stop case: same kind already active.
+      if (activeTimer && activeTimer.kind === kind) {
+        const { recordId } = activeTimer;
+        if (recordId === null) {
+          // Create still in flight — abort timer rather than send orphan update.
+          stopTimer();
+          return;
+        }
+        if (kind === 'feed') {
+          feedStopMutation.mutate({ recordId, endAt: new Date() });
+        } else {
+          sleepStopMutation.mutate({ recordId, endAt: new Date() });
+        }
+        stopTimer();
+        return;
+      }
+
+      // Start case: optimistically start the timer, then fire create.
+      const startedAt = new Date();
+      startTimer(kind);
+      if (kind === 'feed') {
+        feedStartMutation.mutate({
+          baby_id: baby.id,
+          created_by: baby.created_by,
+          type: deriveFeedType(baby.feeding_type),
+          start_at: startedAt.toISOString(),
+        });
+      } else {
+        sleepStartMutation.mutate({
+          baby_id: baby.id,
+          created_by: baby.created_by,
+          type: deriveSleepType(startedAt),
+          start_at: startedAt.toISOString(),
+        });
+      }
+      return;
+    }
+
+    // ----- diaper: choose type via Alert -----
+    if (kind === 'diaper') {
+      Alert.alert('기저귀 종류', '어떤 기저귀였나요?', [
+        {
+          text: '쉬 💧',
+          onPress: () =>
+            diaperMutation.mutate({
+              baby_id: baby.id,
+              created_by: baby.created_by,
+              type: 'wet',
+              at: new Date().toISOString(),
+            }),
+        },
+        {
+          text: '응가 💩',
+          onPress: () =>
+            diaperMutation.mutate({
+              baby_id: baby.id,
+              created_by: baby.created_by,
+              type: 'dirty',
+              at: new Date().toISOString(),
+            }),
+        },
+        {
+          text: '둘 다 🌊',
+          onPress: () =>
+            diaperMutation.mutate({
+              baby_id: baby.id,
+              created_by: baby.created_by,
+              type: 'both',
+              at: new Date().toISOString(),
+            }),
+        },
+        { text: '취소', style: 'cancel' },
+      ]);
+      return;
+    }
+
+    // ----- bath: instant insert -----
+    if (kind === 'bath') {
+      bathMutation.mutate({
+        baby_id: baby.id,
+        created_by: baby.created_by,
+        at: new Date().toISOString(),
+      });
     }
   };
 
   // ============================================================
   // Early returns (after all hooks)
   // ============================================================
-  // app/index.tsx already redirects unauthenticated/no-baby users away,
-  // so this loading state is brief — only first render before the baby
-  // query resolves from cache.
   if (babyQuery.isLoading) {
     return (
       <SafeAreaView className="flex-1 items-center justify-center bg-bg-page">
