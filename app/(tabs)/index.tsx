@@ -22,6 +22,7 @@ import {
   updateFeedingRecord,
   updateSleepRecord,
   type Baby,
+  type FeedingInsert,
 } from '@/features/logging/api';
 import { useEvents } from '@/features/logging/hooks';
 import {
@@ -49,21 +50,16 @@ const SHOW_EVENT_DETAIL = (event: TimelineEvent) =>
 
 const FEED_FAILED = () => Alert.alert('기록 실패', '잠시 후 다시 시도해주세요');
 
+/**
+ * The 4 feeding_records.type values the home-screen quick log can emit.
+ * `solid` is reserved for the dedicated meal-log flow (a future sprint).
+ */
+type FeedTypeChoice = 'breast_left' | 'breast_right' | 'formula';
+
 function formatTimer(secondsElapsed: number): string {
   const mm = String(Math.floor(secondsElapsed / 60)).padStart(2, '0');
   const ss = String(secondsElapsed % 60).padStart(2, '0');
   return `${mm}:${ss}`;
-}
-
-/**
- * Map app-level baby.feeding_type to a sensible feeding_records.type
- * default for the timer-style quick log. Left/right breast modal will
- * refine this in a later sprint; for now `breast_left` is the conventional
- * default in the parenting-app space.
- */
-function deriveFeedType(feedingType: string): 'breast_left' | 'formula' {
-  if (feedingType === 'formula') return 'formula';
-  return 'breast_left';
 }
 
 /**
@@ -188,7 +184,6 @@ export default function HomeScreen() {
     [eventsQuery.data],
   );
 
-  // Active timer state — driven by Zustand for cross-screen continuity.
   const activeTimer = useLoggingStore((s) => s.activeTimer);
   const startTimer = useLoggingStore((s) => s.startTimer);
   const attachRecordId = useLoggingStore((s) => s.attachRecordId);
@@ -196,7 +191,6 @@ export default function HomeScreen() {
 
   const activeKind = activeTimer?.kind ?? null;
 
-  // Tick the elapsed counter only while a timer is active.
   useEffect(() => {
     if (activeTimer === null) {
       setSecondsElapsed(0);
@@ -293,52 +287,103 @@ export default function HomeScreen() {
   // ============================================================
 
   /**
+   * Start the feed timer with the chosen breast/formula type.
+   * Runs the create mutation; activeTimer is set optimistically before
+   * we know the DB record id (attachRecordId fills it in onSuccess).
+   */
+  const startFeedWithType = (baby: Baby, type: FeedTypeChoice) => {
+    const startedAt = new Date();
+    startTimer('feed');
+    const insert: FeedingInsert = {
+      baby_id: baby.id,
+      created_by: baby.created_by,
+      type,
+      start_at: startedAt.toISOString(),
+    };
+    feedStartMutation.mutate(insert);
+  };
+
+  /**
+   * Open the right type-picker for the baby's feeding_type.
+   * - formula:    skip picker, just start (only one valid choice)
+   * - breast:     2-button (왼쪽 / 오른쪽)
+   * - mixed:      3-button (모유 좌 / 모유 우 / 분유)
+   */
+  const promptFeedTypeAndStart = (baby: Baby) => {
+    if (baby.feeding_type === 'formula') {
+      startFeedWithType(baby, 'formula');
+      return;
+    }
+
+    if (baby.feeding_type === 'breast') {
+      Alert.alert('수유 시작', '어느 쪽인가요?', [
+        { text: '왼쪽 🤱', onPress: () => startFeedWithType(baby, 'breast_left') },
+        { text: '오른쪽 🤱', onPress: () => startFeedWithType(baby, 'breast_right') },
+        { text: '취소', style: 'cancel' },
+      ]);
+      return;
+    }
+
+    // mixed
+    Alert.alert('수유 시작', '어떻게 먹였나요?', [
+      { text: '모유 좌 🤱', onPress: () => startFeedWithType(baby, 'breast_left') },
+      { text: '모유 우 🤱', onPress: () => startFeedWithType(baby, 'breast_right') },
+      { text: '분유 🍼', onPress: () => startFeedWithType(baby, 'formula') },
+      { text: '취소', style: 'cancel' },
+    ]);
+  };
+
+  /**
    * Handle a quick-log button tap. Branches by kind:
-   *  - feed/sleep: timer pattern (1st tap = start, 2nd tap = stop)
-   *  - diaper: opens 3-button alert to choose type, then inserts
+   *  - feed: start = type picker (depends on baby.feeding_type), stop = update
+   *  - sleep: timer pattern (1st tap = start with auto nap/night, 2nd tap = stop)
+   *  - diaper: 3-button alert (쉬/응가/둘 다) → insert
    *  - bath: instant insert
    */
   const handleQuickPress = (kind: QuickLogKind) => {
     if (!babyQuery.data) return;
     const baby: Baby = babyQuery.data;
 
-    // ----- timer kinds: feed / sleep -----
-    if (kind === 'feed' || kind === 'sleep') {
-      // Stop case: same kind already active.
-      if (activeTimer && activeTimer.kind === kind) {
+    // ----- feed: timer kind with type picker on start -----
+    if (kind === 'feed') {
+      // Stop case: feed already in progress.
+      if (activeTimer && activeTimer.kind === 'feed') {
         const { recordId } = activeTimer;
         if (recordId === null) {
-          // Create still in flight — abort timer rather than send orphan update.
           stopTimer();
           return;
         }
-        if (kind === 'feed') {
-          feedStopMutation.mutate({ recordId, endAt: new Date() });
-        } else {
-          sleepStopMutation.mutate({ recordId, endAt: new Date() });
-        }
+        feedStopMutation.mutate({ recordId, endAt: new Date() });
         stopTimer();
         return;
       }
 
-      // Start case: optimistically start the timer, then fire create.
-      const startedAt = new Date();
-      startTimer(kind);
-      if (kind === 'feed') {
-        feedStartMutation.mutate({
-          baby_id: baby.id,
-          created_by: baby.created_by,
-          type: deriveFeedType(baby.feeding_type),
-          start_at: startedAt.toISOString(),
-        });
-      } else {
-        sleepStartMutation.mutate({
-          baby_id: baby.id,
-          created_by: baby.created_by,
-          type: deriveSleepType(startedAt),
-          start_at: startedAt.toISOString(),
-        });
+      // Start case: pick type first (Alert), then create + start timer.
+      promptFeedTypeAndStart(baby);
+      return;
+    }
+
+    // ----- sleep: timer kind, no type picker (auto nap/night) -----
+    if (kind === 'sleep') {
+      if (activeTimer && activeTimer.kind === 'sleep') {
+        const { recordId } = activeTimer;
+        if (recordId === null) {
+          stopTimer();
+          return;
+        }
+        sleepStopMutation.mutate({ recordId, endAt: new Date() });
+        stopTimer();
+        return;
       }
+
+      const startedAt = new Date();
+      startTimer('sleep');
+      sleepStartMutation.mutate({
+        baby_id: baby.id,
+        created_by: baby.created_by,
+        type: deriveSleepType(startedAt),
+        start_at: startedAt.toISOString(),
+      });
       return;
     }
 
