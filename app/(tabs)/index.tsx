@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 
-import { Alert, ScrollView, View } from 'react-native';
+import { ActivityIndicator, Alert, ScrollView, Text, View } from 'react-native';
 
 import { differenceInMinutes } from 'date-fns';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -12,6 +12,8 @@ import { QuickLogGrid } from '@/components/home/QuickLogGrid';
 import { Timeline } from '@/components/home/Timeline';
 import { TipCard } from '@/components/home/TipCard';
 import { pickDailyTip } from '@/data/tipMessages';
+import { useCurrentBaby } from '@/features/babies/hooks';
+import { useEvents } from '@/features/logging/hooks';
 import {
   predictNextFeed,
   type PredictionConfidence,
@@ -38,31 +40,6 @@ function formatTimer(secondsElapsed: number): string {
   const mm = String(Math.floor(secondsElapsed / 60)).padStart(2, '0');
   const ss = String(secondsElapsed % 60).padStart(2, '0');
   return `${mm}:${ss}`;
-}
-
-const FALLBACK_BABY = {
-  name: '아기',
-  birthDate: new Date(),
-};
-
-function buildMockEvents(referenceDay: Date): TimelineEvent[] {
-  const at = (h: number, m: number) => {
-    const d = new Date(referenceDay);
-    d.setHours(h, m, 0, 0);
-    return d;
-  };
-  return [
-    { id: '1', kind: 'feed', startedAt: at(6, 0) },
-    { id: '2', kind: 'diaper', startedAt: at(7, 30) },
-    { id: '3', kind: 'sleep', startedAt: at(8, 0), endedAt: at(10, 0) },
-    { id: '4', kind: 'feed', startedAt: at(10, 30) },
-    { id: '5', kind: 'diaper', startedAt: at(12, 0) },
-    { id: '6', kind: 'sleep', startedAt: at(13, 0), endedAt: at(15, 0) },
-    { id: '7', kind: 'feed', startedAt: at(15, 30) },
-    { id: '8', kind: 'bath', startedAt: at(17, 0) },
-    { id: '9', kind: 'diaper', startedAt: at(18, 0) },
-    { id: '10', kind: 'feed', startedAt: at(19, 0) },
-  ];
 }
 
 interface NextActionView {
@@ -95,7 +72,7 @@ function viewFromPrediction(
       label: '자고 있어요',
       primary: hours > 0 ? `${hours}시간 ${mins}분째` : `${mins}분째`,
       primaryEm: '자고 있는 중',
-      secondary: '평균 낮잠은 1~2시간 · 편안한 속도예요',
+      secondary: '평균 낮잠은 1~2시간 · 편안하게 두세요',
       confidence: prediction.confidence,
     };
   }
@@ -130,7 +107,7 @@ function viewFromPrediction(
       scenario: 'warning',
       label: '곧 다음 수유',
       primary: lastFeedAgo,
-      primaryEm: '(예상 시각 도달)',
+      primaryEm: '(예상 시각 임박)',
       secondary: `마지막 수유 ${lastFeedAgo}`,
       confidence: prediction.confidence,
     };
@@ -164,13 +141,10 @@ function deriveLastAt(
 }
 
 export default function HomeScreen() {
-  // Note: app/index.tsx already gates unauthenticated users out, so the
-  // session is guaranteed to exist by the time this screen renders. We don't
-  // need to read it directly here — baby/event data hooks (T501) will pull
-  // user context from the session store as needed.
-
-  const baby = FALLBACK_BABY;
-
+  // ============================================================
+  // Hooks (must run on every render in stable order — no early
+  // returns above this section, ever)
+  // ============================================================
   const [now, setNow] = useState<Date>(() => new Date());
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 60_000);
@@ -185,16 +159,25 @@ export default function HomeScreen() {
     return () => clearInterval(id);
   }, [activeKind]);
 
-  const events = useMemo(() => buildMockEvents(now), [now]);
+  // T501: real data hooks (replaces FALLBACK_BABY + buildMockEvents)
+  const babyQuery = useCurrentBaby();
+  const eventsQuery = useEvents(babyQuery.data?.id ?? null);
 
-  const prediction = useMemo(
+  const events = useMemo<readonly TimelineEvent[]>(
+    () => eventsQuery.data ?? [],
+    [eventsQuery.data],
+  );
+
+  const prediction = useMemo<PredictionResult>(
     () =>
       predictNextFeed({
         events,
-        babyBirthDate: baby.birthDate,
+        // While baby is loading, predictNextFeed runs with a placeholder date.
+        // Result is unused because we early-return below before render.
+        babyBirthDate: babyQuery.data ? new Date(babyQuery.data.birth_date) : new Date(),
         now,
       }),
-    [events, baby.birthDate, now],
+    [events, babyQuery.data, now],
   );
 
   const nextAction = useMemo(
@@ -205,6 +188,9 @@ export default function HomeScreen() {
   const lastAt = useMemo(() => deriveLastAt(events, now), [events, now]);
   const dailyTip = useMemo(() => pickDailyTip(now), [now]);
 
+  // ============================================================
+  // Handlers
+  // ============================================================
   const handleQuickPress = (kind: QuickLogKind) => {
     if (activeKind === kind) {
       setActiveKind(null);
@@ -215,6 +201,34 @@ export default function HomeScreen() {
     }
   };
 
+  // ============================================================
+  // Early returns (after all hooks)
+  // ============================================================
+  // app/index.tsx already redirects unauthenticated/no-baby users away,
+  // so this loading state is brief — only first render before the baby
+  // query resolves from cache.
+  if (babyQuery.isLoading) {
+    return (
+      <SafeAreaView className="flex-1 items-center justify-center bg-bg-page">
+        <ActivityIndicator />
+      </SafeAreaView>
+    );
+  }
+
+  if (babyQuery.isError || !babyQuery.data) {
+    return (
+      <SafeAreaView className="flex-1 items-center justify-center bg-bg-page px-6">
+        <Text className="font-body text-sm text-accent-sienna text-center">
+          아기 정보를 불러오지 못했어요. 잠시 후 다시 시도해주세요.
+        </Text>
+      </SafeAreaView>
+    );
+  }
+
+  const baby = babyQuery.data;
+
+  // TODO(T601): real caregiver count via useCaregivers(baby.id) when family
+  // sharing is wired up. For now, single-parent default.
   const caregiverCount = 1;
 
   return (
@@ -225,7 +239,7 @@ export default function HomeScreen() {
       >
         <BabyProfileHeader
           name={baby.name}
-          birthDate={baby.birthDate}
+          birthDate={new Date(baby.birth_date)}
           caregiverCount={caregiverCount}
           onPress={SHOW_PROFILE_EDIT}
           now={now}
