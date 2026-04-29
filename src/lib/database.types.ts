@@ -50,6 +50,41 @@ export type Database = {
         }
         Relationships: []
       }
+      bath_records: {
+        Row: {
+          at: string
+          baby_id: string
+          created_at: string
+          created_by: string
+          id: string
+          note: string | null
+        }
+        Insert: {
+          at: string
+          baby_id: string
+          created_at?: string
+          created_by: string
+          id?: string
+          note?: string | null
+        }
+        Update: {
+          at?: string
+          baby_id?: string
+          created_at?: string
+          created_by?: string
+          id?: string
+          note?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bath_records_baby_id_fkey"
+            columns: ["baby_id"]
+            isOneToOne: false
+            referencedRelation: "babies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       caregivers: {
         Row: {
           baby_id: string

@@ -35,6 +35,8 @@ export type SleepUpdate = Tables['sleep_records']['Update'];
 
 export type DiaperRecord = Tables['diaper_records']['Row'];
 export type DiaperInsert = Tables['diaper_records']['Insert'];
+export type BathRecord = Tables['bath_records']['Row'];
+export type BathInsert = Tables['bath_records']['Insert'];
 
 // ============================================================
 // babies
@@ -306,6 +308,45 @@ export async function listRecentDiapers(babyId: string, days = 7): Promise<Diape
   const since = new Date(Date.now() - days * 86_400_000).toISOString();
   const { data, error } = await supabase
     .from('diaper_records')
+    .select('*')
+    .eq('baby_id', babyId)
+    .gte('at', since)
+    .order('at', { ascending: false });
+  if (error) throw error;
+  return data ?? [];
+}
+
+// ============================================================
+// bath_records
+// ============================================================
+
+/**
+ * Create a bath record. Like diaper events, baths are point-in-time
+ * (single `at` timestamp, no duration). `note` is optional free text.
+ */
+export async function createBathRecord(input: BathInsert): Promise<BathRecord> {
+  const { data, error } = await supabase.from('bath_records').insert(input).select().single();
+  if (error) throw error;
+  return data;
+}
+
+/**
+ * Delete a bath record. Creator-only (RLS `bath_records_delete_creator`).
+ * (Update intentionally omitted — same pattern as diaper_records: bath
+ * events are instantaneous and typically recreated rather than edited.)
+ */
+export async function deleteBathRecord(recordId: string): Promise<void> {
+  const { error } = await supabase.from('bath_records').delete().eq('id', recordId);
+  if (error) throw error;
+}
+
+/**
+ * List recent bath records for a baby, most recent first.
+ */
+export async function listRecentBaths(babyId: string, days = 7): Promise<BathRecord[]> {
+  const since = new Date(Date.now() - days * 86_400_000).toISOString();
+  const { data, error } = await supabase
+    .from('bath_records')
     .select('*')
     .eq('baby_id', babyId)
     .gte('at', since)
