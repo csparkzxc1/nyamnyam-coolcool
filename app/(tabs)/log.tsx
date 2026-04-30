@@ -2,41 +2,91 @@ import { useEffect, useState } from 'react';
 
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native';
 
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { addDays, isSameDay, subDays } from 'date-fns';
 import { ChevronLeft, ChevronRight } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { EditEventModal } from '@/components/record/EditEventModal';
 import { RecordTimelineList } from '@/components/record/RecordTimelineList';
 import { useCurrentBaby } from '@/features/babies/hooks';
+import {
+  deleteBathRecord,
+  deleteDiaperRecord,
+  deleteFeedingRecord,
+  deleteSleepRecord,
+  updateBathRecord,
+  updateDiaperRecord,
+  updateFeedingRecord,
+  updateSleepRecord,
+} from '@/features/logging/api';
 import type { DetailedEvent } from '@/features/logging/eventsTransform';
 import { useEventsByDate } from '@/features/logging/hooks';
 
+// ============================================================
+// Helpers — dispatch update/delete by event kind
+// ============================================================
+
 /**
- * "기록" tab — vertical detailed timeline for a single calendar day.
- *
- * Pairs with the home screen's compact gradient timeline: home answers
- * "what's happening now / next", this tab answers "what exactly happened
- * today (or any past day)". The two views share the same Supabase data
- * but use different abstractions (TimelineEvent vs DetailedEvent).
- *
- * Date navigation: ◀ / ▶ arrows step one day at a time; the next-day
- * arrow is disabled when on today (no future records exist yet).
- *
- * Tapping a row will open the edit modal (Phase 3, deferred). For now
- * the press is logged and ignored.
+ * Strips the `kind:` and `id:` prefix off a DetailedEvent.id to recover the
+ * raw DB UUID. The transform in eventsTransform.ts adds the prefix to keep
+ * UI keys unique across kinds; the DB row id is what update/delete need.
  */
+function rawId(event: DetailedEvent): string {
+  return event.id.replace(/^(feed|sleep|diaper|bath)-/, '');
+}
+
+interface TimePatch {
+  startedAt: Date;
+  endedAt?: Date;
+}
+
+/**
+ * Run the appropriate update mutation for the event's kind. Maps app-level
+ * camelCase fields to the DB's snake_case columns (start_at / end_at / at).
+ */
+async function updateByKind(event: DetailedEvent, patch: TimePatch) {
+  const id = rawId(event);
+  if (event.kind === 'feed') {
+    return updateFeedingRecord(id, {
+      start_at: patch.startedAt.toISOString(),
+      end_at: patch.endedAt ? patch.endedAt.toISOString() : null,
+    });
+  }
+  if (event.kind === 'sleep') {
+    return updateSleepRecord(id, {
+      start_at: patch.startedAt.toISOString(),
+      end_at: patch.endedAt ? patch.endedAt.toISOString() : null,
+    });
+  }
+  if (event.kind === 'diaper') {
+    return updateDiaperRecord(id, { at: patch.startedAt.toISOString() });
+  }
+  // bath
+  return updateBathRecord(id, { at: patch.startedAt.toISOString() });
+}
+
+async function deleteByKind(event: DetailedEvent) {
+  const id = rawId(event);
+  if (event.kind === 'feed') return deleteFeedingRecord(id);
+  if (event.kind === 'sleep') return deleteSleepRecord(id);
+  if (event.kind === 'diaper') return deleteDiaperRecord(id);
+  return deleteBathRecord(id);
+}
+
+// ============================================================
+// Screen
+// ============================================================
+
 export default function LogScreen() {
-  // ============================================================
-  // Hooks (stable order, no early returns above this section)
-  // ============================================================
+  // ----- now ticker -----
   const [now, setNow] = useState<Date>(() => new Date());
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 60_000);
     return () => clearInterval(id);
   }, []);
 
-  // selectedDate is initialised once to "today at midnight" so that
-  // navigating ↔ days produces stable comparisons (no time-of-day drift).
+  // ----- selected day (defaults to today) -----
   const [selectedDate, setSelectedDate] = useState<Date>(() => {
     const d = new Date();
     d.setHours(0, 0, 0, 0);
@@ -54,17 +104,55 @@ export default function LogScreen() {
     if (canGoForward) setSelectedDate((d) => addDays(d, 1));
   };
 
-  const handleItemPress = (event: DetailedEvent) => {
-    // TODO(T701 Phase 3): open edit modal (시간 수정 / 삭제 / type 변경).
-    // For now this is a no-op — the row tappability is wired so the
-    // modal slot is ready, but the modal itself isn't built yet.
-    // eslint-disable-next-line no-console
-    console.log('row pressed:', event.kind, event.id);
+  // ----- edit modal -----
+  const [editing, setEditing] = useState<DetailedEvent | null>(null);
+
+  const queryClient = useQueryClient();
+  const babyId = babyQuery.data?.id ?? null;
+
+  const invalidateEvents = () => {
+    if (!babyId) return;
+    queryClient.invalidateQueries({ queryKey: ['eventsByDate', babyId] });
+    // The home screen's `events` query is also keyed off this baby — bust it
+    // so the gradient timeline refreshes after an edit.
+    queryClient.invalidateQueries({ queryKey: ['events', babyId] });
   };
 
-  // ============================================================
-  // Early returns (after all hooks)
-  // ============================================================
+  const updateMutation = useMutation({
+    mutationFn: ({ event, patch }: { event: DetailedEvent; patch: TimePatch }) =>
+      updateByKind(event, patch),
+    onSuccess: () => {
+      invalidateEvents();
+      setEditing(null);
+    },
+    onError: () => {
+      // Keep the modal open so the user can retry without re-entering values.
+      // A toast/alert here would be nicer but RN's built-in Alert is enough.
+      // (Alert is imported transitively via EditEventModal)
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (event: DetailedEvent) => deleteByKind(event),
+    onSuccess: () => {
+      invalidateEvents();
+      setEditing(null);
+    },
+  });
+
+  const isSubmitting = updateMutation.isPending || deleteMutation.isPending;
+
+  const handleSave = (patch: TimePatch) => {
+    if (!editing) return;
+    updateMutation.mutate({ event: editing, patch });
+  };
+
+  const handleDelete = () => {
+    if (!editing) return;
+    deleteMutation.mutate(editing);
+  };
+
+  // ----- early returns -----
   if (babyQuery.isLoading) {
     return (
       <SafeAreaView className="flex-1 items-center justify-center bg-bg-page">
@@ -83,9 +171,7 @@ export default function LogScreen() {
     );
   }
 
-  // ============================================================
-  // Render
-  // ============================================================
+  // ----- render -----
   const events = eventsQuery.data ?? [];
 
   return (
@@ -129,7 +215,6 @@ export default function LogScreen() {
           </Pressable>
         </View>
 
-        {/* Loading / error / list */}
         {eventsQuery.isLoading && (
           <View style={{ paddingVertical: 48, alignItems: 'center' }}>
             <ActivityIndicator />
@@ -149,10 +234,18 @@ export default function LogScreen() {
             events={events}
             date={selectedDate}
             now={now}
-            onItemPress={handleItemPress}
+            onItemPress={setEditing}
           />
         )}
       </ScrollView>
+
+      <EditEventModal
+        event={editing}
+        onClose={() => setEditing(null)}
+        onSave={handleSave}
+        onDelete={handleDelete}
+        isSubmitting={isSubmitting}
+      />
     </SafeAreaView>
   );
 }

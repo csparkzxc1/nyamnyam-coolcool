@@ -302,6 +302,24 @@ export async function deleteDiaperRecord(recordId: string): Promise<void> {
 }
 
 /**
+ * Update a diaper record. Creator-only (RLS diaper_records_update_creator).
+ * Typically used by the edit modal to fix a wrong timestamp or type.
+ */
+export async function updateDiaperRecord(
+  recordId: string,
+  patch: Database['public']['Tables']['diaper_records']['Update'],
+): Promise<DiaperRecord> {
+  const { data, error } = await supabase
+    .from('diaper_records')
+    .update(patch)
+    .eq('id', recordId)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+/**
  * List recent diaper changes for a baby, most recent first.
  */
 export async function listRecentDiapers(babyId: string, days = 7): Promise<DiaperRecord[]> {
@@ -338,6 +356,24 @@ export async function createBathRecord(input: BathInsert): Promise<BathRecord> {
 export async function deleteBathRecord(recordId: string): Promise<void> {
   const { error } = await supabase.from('bath_records').delete().eq('id', recordId);
   if (error) throw error;
+}
+
+/**
+ * Update a bath record. Creator-only (RLS ath_records_update_creator).
+ * Typically used by the edit modal to fix a wrong timestamp.
+ */
+export async function updateBathRecord(
+  recordId: string,
+  patch: Database['public']['Tables']['bath_records']['Update'],
+): Promise<BathRecord> {
+  const { data, error } = await supabase
+    .from('bath_records')
+    .update(patch)
+    .eq('id', recordId)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
 }
 
 /**
