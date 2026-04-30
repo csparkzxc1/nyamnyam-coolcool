@@ -24,7 +24,8 @@ import {
   type Baby,
   type FeedingInsert,
 } from '@/features/logging/api';
-import { useEvents } from '@/features/logging/hooks';
+import { useEventsByDate } from '@/features/logging/hooks';
+import { summarizeEvents } from '@/features/logging/summarizeEvents';
 import {
   predictNextFeed,
   type PredictionConfidence,
@@ -177,11 +178,23 @@ export default function HomeScreen() {
   const [secondsElapsed, setSecondsElapsed] = useState(0);
 
   const babyQuery = useCurrentBaby();
-  const eventsQuery = useEvents(babyQuery.data?.id ?? null);
+  const today = useMemo(() => {
+    const d = new Date(now);
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }, [now]);
+  const eventsQuery = useEventsByDate(babyQuery.data?.id ?? null, today);
 
+  const detailedEvents = useMemo(() => eventsQuery.data ?? [], [eventsQuery.data]);
   const events = useMemo<readonly TimelineEvent[]>(
-    () => eventsQuery.data ?? [],
-    [eventsQuery.data],
+    () =>
+      detailedEvents.map((e) => ({
+        id: e.id,
+        kind: e.kind,
+        startedAt: e.startedAt,
+        endedAt: 'endedAt' in e ? e.endedAt : undefined,
+      })),
+    [detailedEvents],
   );
 
   const activeTimer = useLoggingStore((s) => s.activeTimer);
@@ -281,6 +294,7 @@ export default function HomeScreen() {
 
   const lastAt = useMemo(() => deriveLastAt(events, now), [events, now]);
   const dailyTip = useMemo(() => pickDailyTip(now), [now]);
+  const dailySummary = useMemo(() => summarizeEvents(detailedEvents, now), [detailedEvents, now]);
 
   // ============================================================
   // Handlers
@@ -500,7 +514,12 @@ export default function HomeScreen() {
             padding: 16,
           }}
         >
-          <Timeline events={events} now={now} onEventPress={SHOW_EVENT_DETAIL} />
+          <Timeline
+            events={events}
+            now={now}
+            summary={dailySummary}
+            onEventPress={SHOW_EVENT_DETAIL}
+          />
         </View>
 
         <TipCard label={dailyTip.label} message={dailyTip.message} />

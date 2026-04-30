@@ -12,7 +12,7 @@ import {
   listRecentSleeps,
   listSleepsBetween,
 } from './api';
-import { rowsToTimelineEvents } from './eventsTransform';
+import { rowsToDetailedEvents, rowsToTimelineEvents, type DetailedEvent } from './eventsTransform';
 
 /**
  * Fetches all event records for a baby across the 4 record tables and
@@ -96,7 +96,7 @@ function dateKey(date: Date): string {
 export function useEventsByDate(babyId: string | null, date: Date) {
   const key = dateKey(date);
 
-  return useQuery<TimelineEvent[]>({
+  return useQuery<DetailedEvent[]>({
     queryKey: ['eventsByDate', babyId, key],
     queryFn: async () => {
       if (!babyId) return [];
@@ -107,7 +107,7 @@ export function useEventsByDate(babyId: string | null, date: Date) {
         listDiapersBetween(babyId, start, end),
         listBathsBetween(babyId, start, end),
       ]);
-      return rowsToTimelineEvents({ feeds, sleeps, diapers, baths });
+      return rowsToDetailedEvents({ feeds, sleeps, diapers, baths });
     },
     enabled: !!babyId,
   });

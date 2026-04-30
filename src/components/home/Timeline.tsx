@@ -3,6 +3,8 @@ import { useState } from 'react';
 import type { LayoutChangeEvent } from 'react-native';
 import { Pressable, Text, View } from 'react-native';
 
+import { DailySummaryRow } from '@/components/record/DailySummaryRow';
+import type { DailySummary } from '@/features/logging/summarizeEvents';
 import {
   dayFraction,
   filterEventsForDay,
@@ -18,6 +20,8 @@ export interface TimelineProps {
   /** Reference day. Events outside this day are filtered out. Defaults to now. */
   referenceDay?: Date;
   onEventPress?: (event: TimelineEvent) => void;
+  /** Optional daily totals row rendered just under the TODAY header. */
+  summary?: DailySummary;
 }
 
 interface RowConfig {
@@ -58,7 +62,13 @@ const ROW_HEIGHT = 22;
 const DOT_SIZE = 9;
 const LABEL_WIDTH = 36;
 
-export function Timeline({ events, now = new Date(), referenceDay, onEventPress }: TimelineProps) {
+export function Timeline({
+  events,
+  now = new Date(),
+  referenceDay,
+  onEventPress,
+  summary,
+}: TimelineProps) {
   const [trackWidth, setTrackWidth] = useState(0);
 
   const day = referenceDay ?? now;
@@ -83,6 +93,13 @@ export function Timeline({ events, now = new Date(), referenceDay, onEventPress 
           )}`}
         </Text>
       </View>
+
+      {/* Daily summary (optional) — sits between the header and the graph */}
+      {summary && (
+        <View style={{ marginBottom: 10 }}>
+          <DailySummaryRow summary={summary} />
+        </View>
+      )}
 
       {/* Rows + track */}
       <View className="flex-row">
