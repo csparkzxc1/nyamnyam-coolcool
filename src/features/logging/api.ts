@@ -302,6 +302,24 @@ export async function deleteDiaperRecord(recordId: string): Promise<void> {
 }
 
 /**
+ * Update a diaper record. Creator-only (RLS diaper_records_update_creator).
+ * Typically used by the edit modal to fix a wrong timestamp or type.
+ */
+export async function updateDiaperRecord(
+  recordId: string,
+  patch: Database['public']['Tables']['diaper_records']['Update'],
+): Promise<DiaperRecord> {
+  const { data, error } = await supabase
+    .from('diaper_records')
+    .update(patch)
+    .eq('id', recordId)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+/**
  * List recent diaper changes for a baby, most recent first.
  */
 export async function listRecentDiapers(babyId: string, days = 7): Promise<DiaperRecord[]> {
@@ -341,6 +359,24 @@ export async function deleteBathRecord(recordId: string): Promise<void> {
 }
 
 /**
+ * Update a bath record. Creator-only (RLS ath_records_update_creator).
+ * Typically used by the edit modal to fix a wrong timestamp.
+ */
+export async function updateBathRecord(
+  recordId: string,
+  patch: Database['public']['Tables']['bath_records']['Update'],
+): Promise<BathRecord> {
+  const { data, error } = await supabase
+    .from('bath_records')
+    .update(patch)
+    .eq('id', recordId)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+/**
  * List recent bath records for a baby, most recent first.
  */
 export async function listRecentBaths(babyId: string, days = 7): Promise<BathRecord[]> {
@@ -351,6 +387,92 @@ export async function listRecentBaths(babyId: string, days = 7): Promise<BathRec
     .eq('baby_id', babyId)
     .gte('at', since)
     .order('at', { ascending: false });
+  if (error) throw error;
+  return data ?? [];
+}
+
+// ============================================================
+// list-by-date helpers (T701 record timeline)
+// ============================================================
+
+/**
+ * Fetch feeding records whose START falls within [start, end).
+ * Caller is responsible for picking the [start, end) window — typically
+ * a single local calendar day. The query is sorted ascending by start_at.
+ */
+export async function listFeedingsBetween(
+  babyId: string,
+  start: Date,
+  end: Date,
+): Promise<FeedingRecord[]> {
+  const { data, error } = await supabase
+    .from('feeding_records')
+    .select('*')
+    .eq('baby_id', babyId)
+    .gte('start_at', start.toISOString())
+    .lt('start_at', end.toISOString())
+    .order('start_at', { ascending: true });
+  if (error) throw error;
+  return data ?? [];
+}
+
+/**
+ * Fetch sleep records whose START falls within [start, end).
+ * A sleep that crosses end stays attached to its starting day —
+ * the natural "어젯밤 잠" framing.
+ */
+export async function listSleepsBetween(
+  babyId: string,
+  start: Date,
+  end: Date,
+): Promise<SleepRecord[]> {
+  const { data, error } = await supabase
+    .from('sleep_records')
+    .select('*')
+    .eq('baby_id', babyId)
+    .gte('start_at', start.toISOString())
+    .lt('start_at', end.toISOString())
+    .order('start_at', { ascending: true });
+  if (error) throw error;
+  return data ?? [];
+}
+
+/**
+ * Fetch diaper records whose timestamp falls within [start, end).
+ * Diaper events are point-in-time — `at` is the only timestamp.
+ */
+export async function listDiapersBetween(
+  babyId: string,
+  start: Date,
+  end: Date,
+): Promise<DiaperRecord[]> {
+  const { data, error } = await supabase
+    .from('diaper_records')
+    .select('*')
+    .eq('baby_id', babyId)
+    .gte('at', start.toISOString())
+    .lt('at', end.toISOString())
+    .order('at', { ascending: true });
+  if (error) throw error;
+  return data ?? [];
+}
+
+/**
+ * Fetch bath records whose timestamp falls within [start, end).
+ * Same point-in-time semantics as diapers.
+ */
+export async function listBathsBetween(
+  babyId: string,
+  start: Date,
+  end: Date,
+): Promise<BathRecord[]> {
+  const { data, error } = await supabase
+    .from('bath_records')
+    .select('*')
+    .eq('baby_id', babyId)
+    .gte('at', start.toISOString())
+    .lt('at', end.toISOString())
+    .order('at', { ascending: true });
   if (error) throw error;
   return data ?? [];
 }
