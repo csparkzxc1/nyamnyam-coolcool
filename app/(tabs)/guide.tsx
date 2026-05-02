@@ -4,6 +4,8 @@ import { ActivityIndicator, ScrollView, Text, View } from 'react-native';
 
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { Alert } from 'react-native';
+
 import { AgeBandHeader } from '@/components/guide/AgeBandHeader';
 import { FAQSection } from '@/components/guide/FAQSection';
 import {
@@ -12,7 +14,14 @@ import {
 } from '@/components/guide/PersonalComparisonCard';
 import { SleepCueGuide } from '@/components/guide/SleepCueGuide';
 import { StandardsTable } from '@/components/guide/StandardsTable';
+import { GrowthChart } from '@/components/growth/GrowthChart';
+import { GrowthEntryForm } from '@/components/growth/GrowthEntryForm';
 import { useCurrentBaby } from '@/features/babies/hooks';
+import {
+  useCreateGrowthRecord,
+  useGrowthRecords,
+} from '@/features/growth/hooks';
+import type { Sex } from '@/features/growth/whoStandards';
 import {
   bucketFor,
   summarizePersonal,
@@ -49,7 +58,10 @@ export default function GuideScreen() {
   }, []);
 
   const babyQuery = useCurrentBaby();
-  const eventsQuery = useEvents(babyQuery.data?.id ?? null, LOOKBACK_DAYS);
+  const babyIdOrNull = babyQuery.data?.id ?? null;
+  const eventsQuery = useEvents(babyIdOrNull, LOOKBACK_DAYS);
+  const growthQuery = useGrowthRecords(babyIdOrNull);
+  const createGrowth = useCreateGrowthRecord(babyIdOrNull);
 
   const standards = useMemo(() => {
     if (!babyQuery.data) return null;
@@ -60,6 +72,14 @@ export default function GuideScreen() {
     if (!eventsQuery.data) return null;
     return summarizePersonal(eventsQuery.data, LOOKBACK_DAYS, now);
   }, [eventsQuery.data, now]);
+
+  const measurements = useMemo(() => {
+    if (!growthQuery.data) return [];
+    return growthQuery.data.map((row) => ({
+      measuredAt: new Date(row.measured_at),
+      weightKg: row.weight_kg,
+    }));
+  }, [growthQuery.data]);
 
   if (babyQuery.isLoading) {
     return (
@@ -81,6 +101,27 @@ export default function GuideScreen() {
 
   const baby = babyQuery.data;
   const { sleep: currentSleep, feed: currentFeed } = standards;
+  const babySex: Sex | null =
+    baby.gender === 'M' || baby.gender === 'F' ? (baby.gender as Sex) : null;
+
+  const handleGrowthSubmit = (values: {
+    weightKg: number | null;
+    heightCm: number | null;
+    measuredAt: Date;
+  }) => {
+    createGrowth.mutate(
+      {
+        baby_id: baby.id,
+        created_by: baby.created_by,
+        measured_at: values.measuredAt.toISOString(),
+        weight_kg: values.weightKg,
+        height_cm: values.heightCm,
+      },
+      {
+        onError: () => Alert.alert('저장 실패', '잠시 후 다시 시도해 주세요.'),
+      },
+    );
+  };
 
   const comparisonRows: ComparisonRow[] = personal
     ? [
@@ -166,6 +207,17 @@ export default function GuideScreen() {
           ]}
           rows={FEED_STANDARDS}
           isHighlighted={(r) => r.ageLabel === currentFeed.ageLabel}
+        />
+
+        <GrowthChart
+          babyBirthDate={new Date(baby.birth_date)}
+          babySex={babySex}
+          measurements={measurements}
+        />
+
+        <GrowthEntryForm
+          isSubmitting={createGrowth.isPending}
+          onSubmit={handleGrowthSubmit}
         />
 
         <SleepCueGuide />

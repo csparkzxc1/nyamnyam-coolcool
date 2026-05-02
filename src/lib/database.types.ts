@@ -202,6 +202,50 @@ export type Database = {
           },
         ]
       }
+      growth_records: {
+        Row: {
+          baby_id: string
+          created_at: string
+          created_by: string
+          head_circumference_cm: number | null
+          height_cm: number | null
+          id: string
+          measured_at: string
+          note: string | null
+          weight_kg: number | null
+        }
+        Insert: {
+          baby_id: string
+          created_at?: string
+          created_by: string
+          head_circumference_cm?: number | null
+          height_cm?: number | null
+          id?: string
+          measured_at: string
+          note?: string | null
+          weight_kg?: number | null
+        }
+        Update: {
+          baby_id?: string
+          created_at?: string
+          created_by?: string
+          head_circumference_cm?: number | null
+          height_cm?: number | null
+          id?: string
+          measured_at?: string
+          note?: string | null
+          weight_kg?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "growth_records_baby_id_fkey"
+            columns: ["baby_id"]
+            isOneToOne: false
+            referencedRelation: "babies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sleep_records: {
         Row: {
           baby_id: string
