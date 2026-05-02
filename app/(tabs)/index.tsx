@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, ScrollView, Text, View } from 'react-native';
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { differenceInMinutes } from 'date-fns';
+import { differenceInMinutes, differenceInMonths } from 'date-fns';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BabyProfileHeader } from '@/components/home/BabyProfileHeader';
@@ -16,6 +16,7 @@ import { TipCard } from '@/components/home/TipCard';
 import { pickDailyTip } from '@/data/tipMessages';
 import { detectAnomalies } from '@/features/anomalies/detect';
 import { useCurrentBaby } from '@/features/babies/hooks';
+import { useReminderSync } from '@/features/notifications/runtime';
 import {
   createBathRecord,
   createDiaperRecord,
@@ -40,6 +41,7 @@ import {
   useAnomaliesStore,
 } from '@/stores/anomaliesStore';
 import { useLoggingStore } from '@/stores/loggingStore';
+import { useNotificationSettingsStore } from '@/stores/notificationSettingsStore';
 
 const SHOW_REASONING_MODAL = () =>
   Alert.alert('명세 모달', '"왜 이렇게 예측했나요?" 모달 - 추후 구현 예정');
@@ -326,6 +328,31 @@ export default function HomeScreen() {
       }) ?? null
     );
   }, [anomalies, dismissedAt, now]);
+
+  // ----- notification reminder sync (T602/T603) -----
+  const notifSettings = useNotificationSettingsStore();
+  const reminderInput = useMemo(() => {
+    if (!babyQuery.data) return null;
+    const ageMonths = differenceInMonths(now, new Date(babyQuery.data.birth_date));
+    return {
+      babyName: babyQuery.data.name,
+      ageMonths,
+      nextFeedAt: prediction.nextAt,
+      lastFeedAt: prediction.lastFeedAt,
+      // Sleep prediction is a future enhancement (next-sleep TBD); pass null
+      // for now so the sleep reminder builder no-ops.
+      nextSleepAt: null,
+      anomalies,
+      settings: {
+        enabled: notifSettings.enabled,
+        feedRemindersEnabled: notifSettings.feedRemindersEnabled,
+        sleepRemindersEnabled: notifSettings.sleepRemindersEnabled,
+        dnd: notifSettings.dnd,
+      },
+      now,
+    };
+  }, [babyQuery.data, prediction, anomalies, notifSettings, now]);
+  useReminderSync(reminderInput);
 
   // ============================================================
   // Handlers

@@ -8,6 +8,9 @@ import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 
+import { createExpoScheduler } from '@/features/notifications/expoScheduler';
+import { installScheduler } from '@/features/notifications/runtime';
+import { setupNotifications } from '@/lib/notifications';
 import { queryClient } from '@/lib/queryClient';
 import { supabase } from '@/lib/supabase';
 import { useSessionStore } from '@/stores/sessionStore';
@@ -41,6 +44,14 @@ export default function RootLayout() {
     });
     return () => subscription.unsubscribe();
   }, [setSession]);
+
+  useEffect(() => {
+    // Install the production scheduler + Android channels once.
+    installScheduler(createExpoScheduler());
+    void setupNotifications().catch(() => {
+      /* native module unavailable in dev — fine */
+    });
+  }, []);
 
   if (!loaded && !error) {
     return null;
