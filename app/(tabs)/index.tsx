@@ -7,12 +7,14 @@ import { differenceInMinutes } from 'date-fns';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BabyProfileHeader } from '@/components/home/BabyProfileHeader';
+import { AnomalyBanner } from '@/components/home/AnomalyBanner';
 import { NextActionCard, type NextActionScenario } from '@/components/home/NextActionCard';
 import type { QuickLogKind } from '@/components/home/QuickLogButton';
 import { QuickLogGrid } from '@/components/home/QuickLogGrid';
 import { Timeline } from '@/components/home/Timeline';
 import { TipCard } from '@/components/home/TipCard';
 import { pickDailyTip } from '@/data/tipMessages';
+import { detectAnomalies } from '@/features/anomalies/detect';
 import { useCurrentBaby } from '@/features/babies/hooks';
 import {
   createBathRecord,
@@ -24,7 +26,7 @@ import {
   type Baby,
   type FeedingInsert,
 } from '@/features/logging/api';
-import { useEventsByDate } from '@/features/logging/hooks';
+import { useDetailedEvents, useEventsByDate } from '@/features/logging/hooks';
 import { summarizeEvents } from '@/features/logging/summarizeEvents';
 import {
   predictNextFeed,
@@ -33,6 +35,10 @@ import {
 } from '@/lib/prediction';
 import { formatTimeAgo } from '@/lib/timeAgo';
 import type { TimelineEvent } from '@/lib/timelineEvents';
+import {
+  isDismissedWithin24h,
+  useAnomaliesStore,
+} from '@/stores/anomaliesStore';
 import { useLoggingStore } from '@/stores/loggingStore';
 
 const SHOW_REASONING_MODAL = () =>
@@ -184,6 +190,10 @@ export default function HomeScreen() {
     return d;
   }, [now]);
   const eventsQuery = useEventsByDate(babyQuery.data?.id ?? null, today);
+  // Anomaly detection needs >1 day of data (3-day sleep deficit, 24h
+  // diaper count) and the per-kind detail fields (amountMl, diaper type,
+  // sleep type), so it can't reuse the lightweight today query.
+  const recentDetailedQuery = useDetailedEvents(babyQuery.data?.id ?? null, 7);
 
   const detailedEvents = useMemo(() => eventsQuery.data ?? [], [eventsQuery.data]);
   const events = useMemo<readonly TimelineEvent[]>(
@@ -295,6 +305,27 @@ export default function HomeScreen() {
   const lastAt = useMemo(() => deriveLastAt(events, now), [events, now]);
   const dailyTip = useMemo(() => pickDailyTip(now), [now]);
   const dailySummary = useMemo(() => summarizeEvents(detailedEvents, now), [detailedEvents, now]);
+
+  // ----- anomaly detection (T901) -----
+  const dismissedAt = useAnomaliesStore((s) => s.dismissedAt);
+  const dismissAnomaly = useAnomaliesStore((s) => s.dismiss);
+  const anomalies = useMemo(() => {
+    if (!babyQuery.data || !recentDetailedQuery.data) return [];
+    return detectAnomalies({
+      babyBirthDate: new Date(babyQuery.data.birth_date),
+      events: recentDetailedQuery.data,
+      now,
+    });
+  }, [babyQuery.data, recentDetailedQuery.data, now]);
+  // Critical anomalies bypass the dismiss filter.
+  const visibleAnomaly = useMemo(() => {
+    return (
+      anomalies.find((a) => {
+        if (a.severity === 'critical') return true;
+        return !isDismissedWithin24h(dismissedAt[a.code], now);
+      }) ?? null
+    );
+  }, [anomalies, dismissedAt, now]);
 
   // ============================================================
   // Handlers
@@ -489,6 +520,13 @@ export default function HomeScreen() {
           onPress={SHOW_PROFILE_EDIT}
           now={now}
         />
+
+        {visibleAnomaly ? (
+          <AnomalyBanner
+            anomaly={visibleAnomaly}
+            onDismiss={() => dismissAnomaly(visibleAnomaly.code, now)}
+          />
+        ) : null}
 
         <NextActionCard
           scenario={nextAction.scenario}

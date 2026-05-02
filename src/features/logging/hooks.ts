@@ -49,6 +49,38 @@ export function useEvents(babyId: string | null, days = 7) {
 }
 
 // ============================================================
+// list with full per-kind detail across a rolling window
+// ============================================================
+
+/**
+ * Same lookback window as useEvents, but returns the rich
+ * DetailedEvent[] (kind-narrowed type/amount/note fields preserved).
+ *
+ * Used by the anomaly detector — it needs amountMl for OVERFEEDING_RISK,
+ * diaper.type for LOW_DIAPER_COUNT, sleep.type for NAP_TOO_LONG, etc.
+ *
+ * Cache key is intentionally distinct from useEvents (`detailedEvents`
+ * vs `events`) so a single page can hold both shapes without one
+ * invalidating the other.
+ */
+export function useDetailedEvents(babyId: string | null, days = 7) {
+  return useQuery<DetailedEvent[]>({
+    queryKey: ['detailedEvents', babyId, days],
+    queryFn: async () => {
+      if (!babyId) return [];
+      const [feeds, sleeps, diapers, baths] = await Promise.all([
+        listRecentFeedings(babyId, days),
+        listRecentSleeps(babyId, days),
+        listRecentDiapers(babyId, days),
+        listRecentBaths(babyId, days),
+      ]);
+      return rowsToDetailedEvents({ feeds, sleeps, diapers, baths });
+    },
+    enabled: !!babyId,
+  });
+}
+
+// ============================================================
 // list by single calendar day (T701 record timeline)
 // ============================================================
 
