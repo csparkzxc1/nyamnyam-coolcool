@@ -1,0 +1,41 @@
+appId: com.nyamnyam.coolcool
+name: 로그인/로그아웃 플로우
+tags:
+  - smoke
+  - auth
+---
+# 사전 조건:
+#   - testuser@nyamnyam.app / "TestPass1234" 계정이 Supabase Auth에 존재해야 함.
+#   - 앱이 깨끗한 상태(로그아웃)로 실행되어야 함. Maestro의 clearState로 보장.
+
+- launchApp:
+    clearState: true
+
+# 스플래시가 짧게 노출된 뒤 로그인 화면으로 라우팅됨.
+- assertVisible: "로그인"
+
+- tapOn:
+    id: "이메일"
+- inputText: "testuser@nyamnyam.app"
+
+- tapOn:
+    id: "비밀번호"
+- inputText: "TestPass1234"
+
+- tapOn: "로그인"
+
+# 홈 탭으로 진입했는지 확인 — 탭바에 5개 항목이 있고 "홈" 탭이 강조됨.
+- assertVisible: "홈"
+- assertVisible: "기록"
+- assertVisible: "설정"
+
+# 설정 탭으로 이동해 로그아웃.
+- tapOn: "설정"
+- tapOn: "로그아웃"
+
+# 확인 알림 → "확인"
+- tapOn: "확인"
+
+# 다시 로그인 화면으로 돌아왔는지 확인.
+- assertVisible: "로그인"
+- assertVisible: "이메일"

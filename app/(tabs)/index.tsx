@@ -9,10 +9,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { AnomalyBanner } from '@/components/home/AnomalyBanner';
 import { BabyProfileHeader } from '@/components/home/BabyProfileHeader';
 import { NextActionCard, type NextActionScenario } from '@/components/home/NextActionCard';
+import { PredictionReasoningModal } from '@/components/home/PredictionReasoningModal';
 import type { QuickLogKind } from '@/components/home/QuickLogButton';
 import { QuickLogGrid } from '@/components/home/QuickLogGrid';
 import { Timeline } from '@/components/home/Timeline';
 import { TipCard } from '@/components/home/TipCard';
+import { BabyEditModal } from '@/components/shared/BabyEditModal';
 import { pickDailyTip } from '@/data/tipMessages';
 import { detectAnomalies } from '@/features/anomalies/detect';
 import { useCurrentBaby } from '@/features/babies/hooks';
@@ -21,14 +23,17 @@ import {
   createDiaperRecord,
   createFeedingRecord,
   createSleepRecord,
+  updateBaby,
   updateFeedingRecord,
   updateSleepRecord,
   type Baby,
+  type BabyUpdate,
   type FeedingInsert,
 } from '@/features/logging/api';
 import { useDetailedEvents, useEventsByDate } from '@/features/logging/hooks';
 import { summarizeEvents } from '@/features/logging/summarizeEvents';
 import { useReminderSync } from '@/features/notifications/runtime';
+import { useCaregivers } from '@/features/sharing/hooks';
 import {
   predictNextFeed,
   type PredictionConfidence,
@@ -42,11 +47,6 @@ import {
 } from '@/stores/anomaliesStore';
 import { useLoggingStore } from '@/stores/loggingStore';
 import { useNotificationSettingsStore } from '@/stores/notificationSettingsStore';
-
-const SHOW_REASONING_MODAL = () =>
-  Alert.alert('명세 모달', '"왜 이렇게 예측했나요?" 모달 - 추후 구현 예정');
-
-const SHOW_PROFILE_EDIT = () => Alert.alert('프로필 편집', '아기 정보 편집 - 추후 구현 예정');
 
 const SHOW_EVENT_DETAIL = (event: TimelineEvent) =>
   Alert.alert(
@@ -184,6 +184,8 @@ export default function HomeScreen() {
   }, []);
 
   const [secondsElapsed, setSecondsElapsed] = useState(0);
+  const [reasoningOpen, setReasoningOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
 
   const babyQuery = useCurrentBaby();
   const today = useMemo(() => {
@@ -196,6 +198,7 @@ export default function HomeScreen() {
   // diaper count) and the per-kind detail fields (amountMl, diaper type,
   // sleep type), so it can't reuse the lightweight today query.
   const recentDetailedQuery = useDetailedEvents(babyQuery.data?.id ?? null, 7);
+  const caregiversQuery = useCaregivers(babyQuery.data?.id ?? null);
 
   const detailedEvents = useMemo(() => eventsQuery.data ?? [], [eventsQuery.data]);
   const events = useMemo<readonly TimelineEvent[]>(
@@ -287,6 +290,18 @@ export default function HomeScreen() {
     mutationFn: createBathRecord,
     onSuccess: invalidateEvents,
     onError: FEED_FAILED,
+  });
+
+  // ----- mutations: baby profile -----
+  const updateBabyMutation = useMutation({
+    mutationFn: ({ babyId: id, patch }: { babyId: string; patch: BabyUpdate }) =>
+      updateBaby(id, patch),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['baby'] });
+      queryClient.invalidateQueries({ queryKey: ['babies'] });
+      setEditOpen(false);
+    },
+    onError: () => Alert.alert('저장 실패', '잠시 후 다시 시도해 주세요.'),
   });
 
   const prediction = useMemo<PredictionResult>(
@@ -529,10 +544,7 @@ export default function HomeScreen() {
   }
 
   const baby = babyQuery.data;
-
-  // TODO(T601): real caregiver count via useCaregivers(baby.id) when family
-  // sharing is wired up. For now, single-parent default.
-  const caregiverCount = 1;
+  const caregiverCount = caregiversQuery.data?.length ?? 1;
 
   return (
     <SafeAreaView className="flex-1 bg-bg-page" edges={['top']}>
@@ -544,7 +556,7 @@ export default function HomeScreen() {
           name={baby.name}
           birthDate={new Date(baby.birth_date)}
           caregiverCount={caregiverCount}
-          onPress={SHOW_PROFILE_EDIT}
+          onPress={() => setEditOpen(true)}
           now={now}
         />
 
@@ -562,7 +574,7 @@ export default function HomeScreen() {
           primaryEm={nextAction.primaryEm}
           secondary={nextAction.secondary}
           confidence={nextAction.confidence}
-          onLongPress={SHOW_REASONING_MODAL}
+          onLongPress={() => setReasoningOpen(true)}
         />
 
         <QuickLogGrid
@@ -589,6 +601,19 @@ export default function HomeScreen() {
 
         <TipCard label={dailyTip.label} message={dailyTip.message} />
       </ScrollView>
+
+      <PredictionReasoningModal
+        visible={reasoningOpen}
+        prediction={prediction}
+        onClose={() => setReasoningOpen(false)}
+      />
+
+      <BabyEditModal
+        baby={editOpen ? baby : null}
+        isSubmitting={updateBabyMutation.isPending}
+        onClose={() => setEditOpen(false)}
+        onSave={(patch) => updateBabyMutation.mutate({ babyId: baby.id, patch })}
+      />
     </SafeAreaView>
   );
 }

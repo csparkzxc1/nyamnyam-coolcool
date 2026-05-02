@@ -1,0 +1,44 @@
+appId: com.nyamnyam.coolcool
+name: 알림 권한 + 테스트 알림
+tags:
+  - notifications
+---
+# 사전 조건: 로그인된 상태. 알림 권한이 아직 결정되지 않았거나 거부된 상태로
+# 시뮬레이터를 시작해야 결과를 명확히 검증할 수 있음.
+
+- launchApp:
+    stopApp: false
+
+- tapOn: "설정"
+
+- assertVisible: "알림 설정"
+
+# 권한이 아직 없다면 배너 표시 + "권한 요청하기" 버튼
+- runFlow:
+    when:
+      visible: "권한 요청하기"
+    commands:
+      - tapOn: "권한 요청하기"
+      - runFlow:
+          when:
+            visible: "Allow"
+          commands:
+            - tapOn: "Allow"
+
+# 마스터 토글이 ON 인지 확인
+- assertVisible: "알림 사용"
+
+# 수면 알림을 토글 OFF → 다시 ON
+- tapOn: "수면 알림"
+- tapOn: "수면 알림"
+
+# 방해 금지 시작 시각을 한 번 탭(증가)
+- tapOn: "시작 시각"
+
+# 톤 변경 — 무음 → 진동
+- tapOn: "무음"
+- tapOn: "진동만"
+
+# 테스트 알림 발송 → 5초 내 OS 알림 표시
+- tapOn: "테스트 알림 보내기"
+- assertVisible: "5초 후 알림이 도착해요"

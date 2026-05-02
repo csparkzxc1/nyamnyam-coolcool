@@ -1,4 +1,6 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
+import { createJSONStorage, persist } from 'zustand/middleware';
 
 import type { AnomalyCode } from '@/features/anomalies/detect';
 
@@ -11,22 +13,30 @@ interface AnomaliesState {
 }
 
 /**
- * In-memory dismiss state for anomaly banners. Critical anomalies
- * ignore dismiss state — see `isDismissed` consumer below — so they
+ * Dismiss state for anomaly banners. Critical anomalies bypass
+ * dismiss filtering — see `isDismissedWithin24h` below — so they
  * always reappear even if the user tried to swipe them away.
  *
- * Persistence (AsyncStorage) is deferred until we see real product
- * usage; for the MVP "dismiss until app restart" is acceptable and
- * keeps the store free of platform-coupled storage.
+ * Persisted to AsyncStorage so a banner dismissed yesterday stays
+ * hidden across app restarts.
  */
-export const useAnomaliesStore = create<AnomaliesState>((set) => ({
-  dismissedAt: {},
-  dismiss: (code, at) =>
-    set((state) => ({
-      dismissedAt: { ...state.dismissedAt, [code]: at.getTime() },
-    })),
-  reset: () => set({ dismissedAt: {} }),
-}));
+export const useAnomaliesStore = create<AnomaliesState>()(
+  persist(
+    (set) => ({
+      dismissedAt: {},
+      dismiss: (code, at) =>
+        set((state) => ({
+          dismissedAt: { ...state.dismissedAt, [code]: at.getTime() },
+        })),
+      reset: () => set({ dismissedAt: {} }),
+    }),
+    {
+      name: 'nyamnyam:anomalies',
+      storage: createJSONStorage(() => AsyncStorage),
+      partialize: (state) => ({ dismissedAt: state.dismissedAt }),
+    },
+  ),
+);
 
 /**
  * True when a non-critical anomaly was dismissed within the last 24

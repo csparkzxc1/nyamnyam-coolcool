@@ -1,0 +1,39 @@
+appId: com.nyamnyam.coolcool
+name: 가족 공유 (초대 생성 + 링크 공유 시트)
+tags:
+  - sharing
+---
+# 사전 조건: parent 역할로 로그인된 상태 + 아기 1명 등록됨.
+
+- launchApp:
+    stopApp: false
+
+- tapOn: "공유"
+
+# 역할 선택 → 부모
+- assertVisible: "초대할 역할 선택"
+- tapOn: "부모"
+
+# 초대 링크 생성
+- tapOn: "초대 링크 만들기"
+
+# 활성 초대 카드가 화면에 등장
+- assertVisible: "진행 중인 초대"
+- assertVisible: "https://nyamnyam.app/invite/"
+
+# 공유 버튼 탭 → 시스템 Share 시트가 열림
+- tapOn:
+    id: "초대 링크 공유"
+
+# Share sheet은 Maestro가 외부 OS 다이얼로그에 한해 즉시 dismiss 가능
+- runFlow:
+    when:
+      visible: "Cancel"
+    commands:
+      - tapOn: "Cancel"
+
+# 카드가 여전히 화면에 있고, 취소(휴지통) 버튼으로 회수
+- tapOn:
+    id: "초대 취소"
+
+- assertNotVisible: "https://nyamnyam.app/invite/"

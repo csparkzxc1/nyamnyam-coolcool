@@ -1,0 +1,68 @@
+appId: com.nyamnyam.coolcool
+name: 신규 가입 + 5단계 온보딩
+tags:
+  - smoke
+  - onboarding
+---
+# 사전 조건:
+#   - 깨끗한 상태에서 시작 (앱 설치 직후처럼).
+#   - Supabase Auth에 동일 이메일이 없는지 확인.
+
+- launchApp:
+    clearState: true
+
+- tapOn: "회원가입"
+
+- tapOn:
+    id: "이메일"
+- inputText: "newuser+e2e@nyamnyam.app"
+
+- tapOn:
+    id: "비밀번호"
+- inputText: "TestPass1234"
+
+- tapOn: "가입하기"
+
+# Step 1: 환영 화면
+- assertVisible: "냠냠쿨쿨에 오신 걸 환영해요"
+- tapOn: "시작하기"
+
+# Step 2: 아기 정보
+- assertVisible: "우리 아기를 알려주세요"
+- tapOn:
+    id: "아기 이름"
+- inputText: "테스트아기"
+- tapOn:
+    id: "생년월일"
+- inputText: "2026-04-15"
+- tapOn: "남"
+- tapOn: "다음"
+
+# Step 3: 수유 방식
+- assertVisible: "어떻게 먹이고 있나요?"
+- tapOn: "분유"
+- tapOn: "방금"
+- tapOn: "다음"
+
+# Step 4: 알림 권한
+- assertVisible: "알림"
+- tapOn: "허용"
+
+# OS 권한 다이얼로그 — 시뮬레이터/에뮬레이터마다 다름
+- runFlow:
+    when:
+      visible: "Allow"
+    commands:
+      - tapOn: "Allow"
+
+- tapOn: "다음"
+
+# Step 5: 가족 공유 — "나중에"
+- assertVisible: "함께 기록할 가족을 초대해 볼까요?"
+- tapOn: "나중에"
+
+- tapOn: "냠냠쿨쿨 시작하기"
+
+# 홈 화면 도달 확인
+- assertVisible: "테스트아기"
+- assertVisible: "다음 수유 예상"

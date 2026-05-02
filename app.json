@@ -4,6 +4,12 @@
     "slug": "nyamnyam-coolcool",
     "scheme": "nyamnyam",
     "version": "1.0.0",
+    "extra": {
+      "eas": {
+        "projectId": "REPLACE_WITH_EAS_PROJECT_ID"
+      }
+    },
+    "owner": "nyamnyam",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -15,8 +21,10 @@
     },
     "ios": {
       "supportsTablet": true,
+      "bundleIdentifier": "com.nyamnyam.coolcool",
       "infoPlist": {
-        "UIBackgroundModes": ["remote-notification"]
+        "UIBackgroundModes": ["remote-notification"],
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
@@ -25,7 +33,9 @@
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.nyamnyam.coolcool",
+      "permissions": ["NOTIFICATIONS", "WAKE_LOCK", "VIBRATE"]
     },
     "web": {
       "bundler": "metro",

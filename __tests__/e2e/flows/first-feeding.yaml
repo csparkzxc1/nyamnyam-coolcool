@@ -1,0 +1,38 @@
+appId: com.nyamnyam.coolcool
+name: 첫 수유 기록 (시작 → 종료 → 타임라인 반영)
+tags:
+  - smoke
+  - logging
+---
+# 사전 조건: 로그인된 상태 + 아기 1명 등록됨. 첫 수유 기록은 없는 상태.
+
+- launchApp:
+    stopApp: false
+
+- tapOn: "홈"
+
+# 첫 수유 빈 상태 확인
+- assertVisible: "오늘 첫 수유"
+
+# QuickLogButton "수유" 탭
+- tapOn:
+    id: "수유 시작"
+
+# 수유 종류 선택 (분유 모드 가정 → 자동 시작)
+# breast / mixed 모드면 alert 가 뜸; e2e는 분유 baby로 fixture 잡음.
+
+# 활성 타이머 확인 — 00:00 ~ 00:01 사이 표기 변화
+- assertVisible: "00:0"
+
+# 5초 대기 후 종료 탭
+- waitForAnimationToEnd:
+    timeout: 5000
+- tapOn:
+    id: "수유 종료"
+
+# 타임라인에 수유 점이 그려졌는지 확인
+- assertVisible:
+    id: "timeline-feed-dot"
+
+# 마지막 수유 시간 표기 (예: "방금" / "1분 전")
+- assertVisible: "방금"

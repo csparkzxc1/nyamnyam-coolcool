@@ -12,6 +12,7 @@
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
     "test": "jest",
+    "test:e2e": "maestro test __tests__/e2e/flows",
     "postinstall": "patch-package",
     "prepare": "husky"
   },
