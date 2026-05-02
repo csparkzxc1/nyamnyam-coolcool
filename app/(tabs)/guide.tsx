@@ -5,10 +5,12 @@ import { ActivityIndicator, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AgeBandHeader } from '@/components/guide/AgeBandHeader';
+import { FAQSection } from '@/components/guide/FAQSection';
 import {
   PersonalComparisonCard,
   type ComparisonRow,
 } from '@/components/guide/PersonalComparisonCard';
+import { SleepCueGuide } from '@/components/guide/SleepCueGuide';
 import { StandardsTable } from '@/components/guide/StandardsTable';
 import { useCurrentBaby } from '@/features/babies/hooks';
 import {
@@ -165,6 +167,10 @@ export default function GuideScreen() {
           rows={FEED_STANDARDS}
           isHighlighted={(r) => r.ageLabel === currentFeed.ageLabel}
         />
+
+        <SleepCueGuide />
+
+        <FAQSection />
 
         <View style={{ paddingHorizontal: 8, paddingTop: 4, gap: 6 }}>
           <Text className="font-body text-[11px]" style={{ color: '#8A7A63' }}>
