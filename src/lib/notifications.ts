@@ -7,8 +7,9 @@
  * touch this file — they import the in-memory scheduler from
  * `src/features/notifications/inMemoryScheduler.ts`.
  */
-import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
+
+import * as Notifications from 'expo-notifications';
 
 export type PermissionStatus = 'granted' | 'denied' | 'undetermined';
 

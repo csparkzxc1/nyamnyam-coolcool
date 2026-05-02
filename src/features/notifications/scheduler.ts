@@ -14,7 +14,7 @@
  *   - 24h 소변 기저귀 < 6장 → warning/critical (severity-driven)
  *   - 방해금지 시간(22~6)에는 critical만 통과
  */
-import { addMinutes, differenceInMinutes } from 'date-fns';
+import { addMinutes } from 'date-fns';
 
 import type { Anomaly } from '@/features/anomalies/detect';
 

@@ -6,8 +6,8 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { differenceInMinutes, differenceInMonths } from 'date-fns';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { BabyProfileHeader } from '@/components/home/BabyProfileHeader';
 import { AnomalyBanner } from '@/components/home/AnomalyBanner';
+import { BabyProfileHeader } from '@/components/home/BabyProfileHeader';
 import { NextActionCard, type NextActionScenario } from '@/components/home/NextActionCard';
 import type { QuickLogKind } from '@/components/home/QuickLogButton';
 import { QuickLogGrid } from '@/components/home/QuickLogGrid';
@@ -16,7 +16,6 @@ import { TipCard } from '@/components/home/TipCard';
 import { pickDailyTip } from '@/data/tipMessages';
 import { detectAnomalies } from '@/features/anomalies/detect';
 import { useCurrentBaby } from '@/features/babies/hooks';
-import { useReminderSync } from '@/features/notifications/runtime';
 import {
   createBathRecord,
   createDiaperRecord,
@@ -29,6 +28,7 @@ import {
 } from '@/features/logging/api';
 import { useDetailedEvents, useEventsByDate } from '@/features/logging/hooks';
 import { summarizeEvents } from '@/features/logging/summarizeEvents';
+import { useReminderSync } from '@/features/notifications/runtime';
 import {
   predictNextFeed,
   type PredictionConfidence,

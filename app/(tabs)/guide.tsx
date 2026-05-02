@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 
-import { ActivityIndicator, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, ScrollView, Text, View , Alert } from 'react-native';
 
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { Alert } from 'react-native';
 
+import { GrowthChart } from '@/components/growth/GrowthChart';
+import { GrowthEntryForm } from '@/components/growth/GrowthEntryForm';
 import { AgeBandHeader } from '@/components/guide/AgeBandHeader';
 import { FAQSection } from '@/components/guide/FAQSection';
 import {
@@ -14,8 +15,6 @@ import {
 } from '@/components/guide/PersonalComparisonCard';
 import { SleepCueGuide } from '@/components/guide/SleepCueGuide';
 import { StandardsTable } from '@/components/guide/StandardsTable';
-import { GrowthChart } from '@/components/growth/GrowthChart';
-import { GrowthEntryForm } from '@/components/growth/GrowthEntryForm';
 import { useCurrentBaby } from '@/features/babies/hooks';
 import {
   useCreateGrowthRecord,

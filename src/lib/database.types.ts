@@ -202,6 +202,47 @@ export type Database = {
           },
         ]
       }
+      invites: {
+        Row: {
+          baby_id: string
+          created_at: string
+          expires_at: string
+          invited_by: string
+          role: string
+          token: string
+          used_at: string | null
+          used_by: string | null
+        }
+        Insert: {
+          baby_id: string
+          created_at?: string
+          expires_at?: string
+          invited_by: string
+          role: string
+          token: string
+          used_at?: string | null
+          used_by?: string | null
+        }
+        Update: {
+          baby_id?: string
+          created_at?: string
+          expires_at?: string
+          invited_by?: string
+          role?: string
+          token?: string
+          used_at?: string | null
+          used_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invites_baby_id_fkey"
+            columns: ["baby_id"]
+            isOneToOne: false
+            referencedRelation: "babies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       growth_records: {
         Row: {
           baby_id: string

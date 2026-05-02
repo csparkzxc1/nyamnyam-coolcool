@@ -5,11 +5,11 @@ import { Alert, Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { SettingsRow } from '@/components/settings/SettingsRow';
+import { getScheduler } from '@/features/notifications/runtime';
 import {
   getNotificationPermission,
   requestNotificationPermission,
 } from '@/lib/notifications';
-import { getScheduler } from '@/features/notifications/runtime';
 import {
   useNotificationSettingsStore,
   type NotificationTone,

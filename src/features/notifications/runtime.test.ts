@@ -1,10 +1,10 @@
 import { createInMemoryScheduler } from './inMemoryScheduler';
-import { DEFAULT_SETTINGS } from './scheduler';
 import {
   getScheduler,
   installScheduler,
   syncReminders,
 } from './runtime';
+import { DEFAULT_SETTINGS } from './scheduler';
 
 describe('runtime scheduler', () => {
   it('returns an in-memory scheduler when nothing is installed', () => {
