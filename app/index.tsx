@@ -49,7 +49,7 @@ export default function Index() {
   const babies = babiesQuery.data ?? [];
 
   if (babies.length === 0) {
-    return <Redirect href="/onboarding/baby-setup" />;
+    return <Redirect href="/onboarding/1" />;
   }
 
   // Baby 존재 — 첫 아기를 current로 세팅 (없을 때만)
