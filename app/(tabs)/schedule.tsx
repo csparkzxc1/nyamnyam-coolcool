@@ -35,13 +35,13 @@ function formatStatusLabel(status: VaccineStatus): string {
 function statusColor(status: VaccineStatus): string {
   switch (status.kind) {
     case 'completed':
-      return '#8A7A63'; // muted
+      return '#8A7A63';
     case 'overdue':
-      return '#B85428'; // sienna (urgent)
+      return '#B85428';
     case 'due':
-      return '#3F2E1E'; // dark brown (action needed)
+      return '#3F2E1E';
     case 'upcoming':
-      return '#5C4A37'; // medium brown
+      return '#5C4A37';
   }
 }
 
@@ -51,8 +51,20 @@ function formatRecommendedDate(d: Date): string {
   return `${d.getFullYear()}.${String(month).padStart(2, '0')}.${String(day).padStart(2, '0')}`;
 }
 
+/**
+ * Parse a DB date string ('YYYY-MM-DD' or full ISO) into a Date.
+ * Returns null on garbage input — schedule rendering bails out cleanly
+ * rather than crashing on `new Date('')` → NaN-everywhere arithmetic.
+ */
+function parseBirthDate(raw: string | null | undefined): Date | null {
+  if (!raw || typeof raw !== 'string') return null;
+  const d = new Date(raw);
+  if (Number.isNaN(d.getTime())) return null;
+  return d;
+}
+
 // ============================================================
-// Sub-components
+// Components
 // ============================================================
 
 interface NextDoseCardProps {
@@ -172,21 +184,10 @@ function NextDoseCard({ next, onMarkDone }: NextDoseCardProps) {
   );
 }
 
-interface ProgressBarProps {
-  done: number;
-  total: number;
-}
-
-function ProgressBar({ done, total }: ProgressBarProps) {
+function ProgressBar({ done, total }: { done: number; total: number }) {
   const pct = total === 0 ? 0 : Math.round((done / total) * 100);
   return (
-    <View
-      style={{
-        backgroundColor: '#FFFFFF',
-        borderRadius: 12,
-        padding: 14,
-      }}
-    >
+    <View style={{ backgroundColor: '#FFFFFF', borderRadius: 12, padding: 14 }}>
       <View
         style={{
           flexDirection: 'row',
@@ -207,24 +208,19 @@ function ProgressBar({ done, total }: ProgressBarProps) {
           overflow: 'hidden',
         }}
       >
-        <View
-          style={{
-            width: `${pct}%`,
-            height: '100%',
-            backgroundColor: '#B85428',
-          }}
-        />
+        <View style={{ width: `${pct}%`, height: '100%', backgroundColor: '#B85428' }} />
       </View>
     </View>
   );
 }
 
-interface DoseRowProps {
+function DoseRow({
+  item,
+  onToggle,
+}: {
   item: VaccineDoseWithStatus;
   onToggle: (doseId: string, completed: boolean) => void;
-}
-
-function DoseRow({ item, onToggle }: DoseRowProps) {
+}) {
   const { dose, status, recommendedDate } = item;
   const isCompleted = status.kind === 'completed';
 
@@ -241,7 +237,6 @@ function DoseRow({ item, onToggle }: DoseRowProps) {
         opacity: pressed ? 0.7 : 1,
       })}
     >
-      {/* Checkbox */}
       <View
         style={{
           width: 24,
@@ -257,7 +252,6 @@ function DoseRow({ item, onToggle }: DoseRowProps) {
         {isCompleted && <Check size={16} color="#FFFFFF" strokeWidth={3} />}
       </View>
 
-      {/* Body */}
       <View style={{ flex: 1 }}>
         <Text
           className="font-display text-[14px]"
@@ -274,7 +268,6 @@ function DoseRow({ item, onToggle }: DoseRowProps) {
         </Text>
       </View>
 
-      {/* Status badge */}
       <Text className="font-display text-[11px]" style={{ color: statusColor(status) }}>
         {formatStatusLabel(status)}
       </Text>
@@ -291,30 +284,43 @@ type FilterTab = 'upcoming' | 'completed';
 export default function ScheduleScreen() {
   const babyQuery = useCurrentBaby();
   const baby = babyQuery.data ?? null;
-  const completions = useVaccineStore((s) => (baby ? s.getCompletionsForBaby(baby.id) : {}));
+
+  // Subscribe to the entire completions map and derive per-baby slice
+  // inside useMemo. This avoids selector instability — using a getter
+  // selector like `(s) => s.getCompletionsForBaby(...)` returns a fresh
+  // object on every render and triggers Zustand to flag a change.
+  const allCompletions = useVaccineStore((s) => s.completions);
   const markCompleted = useVaccineStore((s) => s.markCompleted);
   const unmarkCompleted = useVaccineStore((s) => s.unmarkCompleted);
 
-  const [filter, setFilter] = useState<FilterTab>('upcoming');
+  const completions = useMemo(() => {
+    if (!baby) return {} as Record<string, Date>;
+    const result: Record<string, Date> = {};
+    for (const c of Object.values(allCompletions)) {
+      if (c.babyId === baby.id) {
+        result[c.doseId] = new Date(c.completedAt);
+      }
+    }
+    return result;
+  }, [allCompletions, baby]);
 
-  const now = new Date();
-  const birthDate = baby?.birth_date ? new Date(baby.birth_date) : null;
+  const [filter, setFilter] = useState<FilterTab>('upcoming');
+  const [now] = useState(() => new Date());
+
+  const birthDate = useMemo(() => parseBirthDate(baby?.birth_date), [baby]);
 
   const allStatuses = useMemo(() => {
     if (!birthDate) return [];
     return computeAllDoseStatuses(birthDate, now, completions);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [birthDate?.getTime(), completions, now.toDateString()]);
+  }, [birthDate, now, completions]);
 
   const next = useMemo(() => {
     if (!birthDate) return null;
     return nextDose(birthDate, now, completions);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [birthDate?.getTime(), completions, now.toDateString()]);
+  }, [birthDate, now, completions]);
 
   const progress = useMemo(() => vaccineProgress(completions), [completions]);
 
-  // Sort statuses for display: overdue, due, upcoming, completed.
   const filtered = useMemo(() => {
     const order: Record<VaccineStatus['kind'], number> = {
       overdue: 0,
@@ -359,11 +365,21 @@ export default function ScheduleScreen() {
     );
   }
 
-  if (babyQuery.isError || !baby || !birthDate) {
+  if (!baby) {
+    return (
+      <SafeAreaView className="flex-1 items-center justify-center bg-bg-page px-6">
+        <Text className="font-body text-sm text-fg-secondary text-center">
+          아기 정보를 불러오는 중이에요.
+        </Text>
+      </SafeAreaView>
+    );
+  }
+
+  if (!birthDate) {
     return (
       <SafeAreaView className="flex-1 items-center justify-center bg-bg-page px-6">
         <Text className="font-body text-sm text-accent-sienna text-center">
-          아기 정보를 불러오지 못했어요.{'\n'}생일 정보가 등록되어 있는지 확인해주세요.
+          생일 정보가 없어 일정을 계산할 수 없어요.{'\n'}설정에서 아기 정보를 확인해주세요.
         </Text>
       </SafeAreaView>
     );
@@ -375,7 +391,6 @@ export default function ScheduleScreen() {
         contentContainerStyle={{ padding: 20, gap: 14, paddingBottom: 32 }}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header */}
         <View
           style={{
             flexDirection: 'row',
@@ -388,16 +403,13 @@ export default function ScheduleScreen() {
           <Text className="font-display text-[20px] text-fg-primary">예방접종 일정</Text>
         </View>
 
-        {/* Next dose */}
         <NextDoseCard
           next={next}
           onMarkDone={(doseId) => markCompleted(baby.id, doseId, new Date())}
         />
 
-        {/* Progress */}
         <ProgressBar done={progress.completedCount} total={progress.totalCount} />
 
-        {/* Filter tabs */}
         <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
           {(['upcoming', 'completed'] as const).map((tab) => {
             const isActive = filter === tab;
@@ -425,7 +437,6 @@ export default function ScheduleScreen() {
           })}
         </View>
 
-        {/* List */}
         <View style={{ gap: 8 }}>
           {filtered.length === 0 ? (
             <View style={{ paddingVertical: 32, alignItems: 'center' }}>
@@ -440,13 +451,12 @@ export default function ScheduleScreen() {
           )}
         </View>
 
-        {/* Footer note */}
         <Text
           className="font-body text-[11px] text-fg-secondary"
           style={{ marginTop: 8, textAlign: 'center', lineHeight: 16 }}
         >
-          한국 질병관리청 표준 예방접종 일정 기준입니다.{'\n'}
-          정확한 일정은 담당 의사와 상담해주세요.
+          한국 질병관리청 표준 예방접종 일정 기준입니다.{'\n'}정확한 일정은 담당 의사와
+          상담해주세요.
         </Text>
       </ScrollView>
     </SafeAreaView>
