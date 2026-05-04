@@ -6,10 +6,10 @@
     "version": "1.0.0",
     "extra": {
       "eas": {
-        "projectId": "REPLACE_WITH_EAS_PROJECT_ID"
-      }
+        "projectId": "86f286df-3c97-4dc5-842a-65344bf9c9d2"
+      },
+      "router": {}
     },
-    "owner": "nyamnyam",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -23,7 +23,7 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.nyamnyam.coolcool",
       "infoPlist": {
-        "UIBackgroundModes": ["remote-notification"],
+        "UIBackgroundModes": ["remote-notification", "remote-notification"],
         "ITSAppUsesNonExemptEncryption": false
       }
     },
@@ -35,7 +35,14 @@
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "package": "com.nyamnyam.coolcool",
-      "permissions": ["NOTIFICATIONS", "WAKE_LOCK", "VIBRATE"]
+      "permissions": [
+        "NOTIFICATIONS",
+        "WAKE_LOCK",
+        "VIBRATE",
+        "NOTIFICATIONS",
+        "WAKE_LOCK",
+        "VIBRATE"
+      ]
     },
     "web": {
       "bundler": "metro",
@@ -52,6 +59,13 @@
           "color": "#B85428"
         }
       ]
-    ]
+    ],
+    "owner": "csparkzxc",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/86f286df-3c97-4dc5-842a-65344bf9c9d2"
+    }
   }
 }

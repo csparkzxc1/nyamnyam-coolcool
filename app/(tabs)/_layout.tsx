@@ -1,5 +1,5 @@
 import { Tabs } from 'expo-router';
-import { Book, House, List, Settings, Users } from 'lucide-react-native';
+import { Book, House, List, Settings, Syringe } from 'lucide-react-native';
 
 const ACTIVE_TINT = '#B85428'; // sienna
 const INACTIVE_TINT = '#8A7A63'; // muted
@@ -42,20 +42,20 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
+        name="schedule"
+        options={{
+          title: '일정',
+          tabBarIcon: ({ color, size }) => (
+            <Syringe size={size ?? 22} color={color} strokeWidth={1.8} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="guide"
         options={{
           title: '가이드',
           tabBarIcon: ({ color, size }) => (
             <Book size={size ?? 22} color={color} strokeWidth={1.8} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="share"
-        options={{
-          title: '공유',
-          tabBarIcon: ({ color, size }) => (
-            <Users size={size ?? 22} color={color} strokeWidth={1.8} />
           ),
         }}
       />
@@ -68,6 +68,9 @@ export default function TabsLayout() {
           ),
         }}
       />
+      {/* share.tsx is no longer routed; the file stays for the family-share
+          components which will move to settings in a follow-up commit. */}
+      <Tabs.Screen name="share" options={{ href: null }} />
     </Tabs>
   );
 }
